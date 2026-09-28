@@ -1,0 +1,20 @@
+# Ignorar dependencias locales
+node_modules
+npm-debug.log
+
+# Ignorar builds y directorios temporales locales
+build
+tmp
+.adonisjs
+
+# Ignorar archivos de control de versiones e IDE
+.git
+.gitignore
+.vscode
+.kiro
+scratch
+
+# Ignorar entornos locales configurados
+.env
+.env.test
+.env.development

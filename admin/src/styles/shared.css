@@ -1,0 +1,242 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Estilos compartidos — Panel DTIC
+   Importado una sola vez desde src/main.tsx
+   Contiene clases reutilizadas en Carnets, DetalleCarnet y Auditoría
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── Estructura de página ─────────────────────────────────────────────────── */
+
+.pagina {
+  padding: var(--espacio-xl);
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-lg);
+  width: 100%;
+}
+
+.pagina-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--espacio-md);
+}
+
+.pagina-titulo {
+  font-size: var(--tamanio-xxl);
+  font-weight: 700;
+  color: var(--color-primario);
+}
+
+.pagina-subtitulo {
+  font-size: var(--tamanio-sm);
+  color: var(--color-gris-secundario);
+  margin-top: var(--espacio-xs);
+}
+
+/* ── Filtros ──────────────────────────────────────────────────────────────── */
+
+.filtros {
+  display: flex;
+  gap: var(--espacio-md);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filtros-busqueda {
+  flex: 1;
+  min-width: 240px;
+  padding: var(--espacio-sm) var(--espacio-md);
+  border: 1px solid var(--color-gris-medio);
+  border-radius: var(--radio-md);
+  font-size: var(--tamanio-md);
+  background-color: var(--color-blanco);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.filtros-busqueda:focus {
+  border-color: var(--color-primario);
+  box-shadow: 0 0 0 3px rgba(0, 48, 135, 0.10);
+}
+
+/* ── Tabla ────────────────────────────────────────────────────────────────── */
+
+.tabla-contenedor {
+  background-color: var(--color-blanco);
+  border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-md);
+  overflow: hidden;
+  border: 1px solid var(--color-gris-medio);
+}
+
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tabla thead tr {
+  background-color: var(--color-gris-claro);
+  border-bottom: 1px solid var(--color-gris-medio);
+}
+
+.tabla th {
+  padding: var(--espacio-sm) var(--espacio-md);
+  text-align: left;
+  font-size: var(--tamanio-xs);
+  font-weight: 700;
+  color: var(--color-gris-secundario);
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  white-space: nowrap;
+}
+
+.tabla-fila {
+  border-bottom: 1px solid var(--color-gris-medio);
+  transition: background-color 0.12s;
+}
+
+.tabla-fila:last-child {
+  border-bottom: none;
+}
+
+.tabla-fila:hover {
+  background-color: #f0f4ff;
+}
+
+.tabla td {
+  padding: var(--espacio-sm) var(--espacio-md);
+  font-size: var(--tamanio-md);
+  vertical-align: middle;
+}
+
+.tabla-vacia {
+  text-align: center;
+  color: var(--color-gris-deshabilitado);
+  padding: var(--espacio-xl) !important;
+}
+
+.tabla-nombre {
+  font-weight: 600;
+  color: var(--color-gris-texto);
+  font-size: var(--tamanio-md);
+}
+
+.tabla-email {
+  font-size: var(--tamanio-xs);
+  color: var(--color-gris-deshabilitado);
+}
+
+.tabla-conteo {
+  font-size: var(--tamanio-xs);
+  color: var(--color-gris-deshabilitado);
+  text-align: right;
+}
+
+/* ── Badges de estado ─────────────────────────────────────────────────────── */
+
+.badge-estado {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: var(--tamanio-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-estado--activo {
+  background-color: var(--color-exito-bg);
+  color: var(--color-exito);
+}
+
+.badge-estado--habilitado {
+  background-color: var(--color-habilitado-bg);
+  color: var(--color-habilitado);
+}
+
+.badge-estado--inactivo {
+  background-color: var(--color-gris-claro);
+  color: var(--color-gris-deshabilitado);
+}
+
+/* ── Botones genéricos ────────────────────────────────────────────────────── */
+
+.btn {
+  padding: var(--espacio-sm) var(--espacio-md);
+  border-radius: var(--radio-md);
+  font-size: var(--tamanio-sm);
+  font-weight: 600;
+  border: none;
+  transition: all 0.18s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espacio-xs);
+  cursor: pointer;
+  letter-spacing: 0.1px;
+}
+
+.btn:disabled {
+  background-color: var(--color-gris-claro);
+  color: var(--color-gris-deshabilitado);
+  border: 1px solid var(--color-gris-medio);
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.btn--bloque {
+  width: 100%;
+}
+
+.btn--primario {
+  background-color: var(--color-primario);
+  color: var(--color-blanco);
+}
+
+.btn--primario:hover {
+  background-color: var(--color-primario-hover);
+}
+
+.btn--secundario {
+  background-color: var(--color-blanco);
+  color: var(--color-gris-texto);
+  border: 1px solid var(--color-gris-medio);
+}
+
+.btn--secundario:hover {
+  border-color: var(--color-primario);
+  color: var(--color-primario);
+}
+
+.btn--peligro {
+  background-color: var(--color-acento);
+  color: var(--color-blanco);
+}
+
+.btn--peligro:hover {
+  background-color: var(--color-acento-hover);
+}
+
+/* ── Responsividad ────────────────────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  .pagina {
+    padding: var(--espacio-md);
+    gap: var(--espacio-md);
+  }
+}
+
+/* ── Animación Spin ── */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

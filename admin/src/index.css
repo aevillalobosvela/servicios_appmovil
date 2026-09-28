@@ -1,0 +1,96 @@
+/* ── Reset y base ─────────────────────────────────────────────────────────── */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /* Colores institucionales UTO */
+  --color-primario: #003087;
+  --color-primario-claro: #004DB3;
+  --color-primario-hover: #002266;
+  --color-acento: #C0392B;
+  --color-acento-hover: #96281B;
+  --color-blanco: #FFFFFF;
+  --color-gris-claro: #F0F2F5;
+  --color-gris-medio: #E2E6EA;
+  --color-gris-texto: #1A1D23;
+  --color-gris-secundario: #5A6270;
+  --color-gris-deshabilitado: #9EA8B3;
+  --color-exito: #1A7F3C;
+  --color-exito-bg: #E6F4EC;
+  --color-error: #C0392B;
+  --color-error-bg: #FDECEA;
+  --color-advertencia: #b38403;
+  --color-advertencia-bg: #fcedb1;
+  --color-habilitado: #1565C0;
+  --color-habilitado-bg: #E3F2FD;
+
+  /* Tipografía */
+  --fuente-base: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --tamanio-xs: 11px;
+  --tamanio-sm: 13px;
+  --tamanio-md: 15px;
+  --tamanio-lg: 17px;
+  --tamanio-xl: 21px;
+  --tamanio-xxl: 26px;
+
+  /* Espaciado */
+  --espacio-xs: 4px;
+  --espacio-sm: 8px;
+  --espacio-md: 16px;
+  --espacio-lg: 24px;
+  --espacio-xl: 32px;
+
+  /* Bordes — más redondeados para look moderno */
+  --radio-sm: 6px;
+  --radio-md: 10px;
+  --radio-lg: 14px;
+  --radio-xl: 20px;
+
+  /* Sombras — más definidas */
+  --sombra-sm: 0 1px 4px rgba(0, 0, 0, 0.07), 0 1px 2px rgba(0, 0, 0, 0.05);
+  --sombra-md: 0 4px 12px rgba(0, 0, 0, 0.09), 0 1px 4px rgba(0, 0, 0, 0.06);
+  --sombra-lg: 0 8px 24px rgba(0, 0, 0, 0.11), 0 2px 8px rgba(0, 0, 0, 0.07);
+
+  /* Layout */
+  --ancho-sidebar: 248px;
+  --alto-header: 60px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  font-family: var(--fuente-base);
+  font-size: var(--tamanio-md);
+  color: var(--color-gris-texto);
+  background-color: var(--color-gris-claro);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+ul,
+ol {
+  list-style: none;
+}

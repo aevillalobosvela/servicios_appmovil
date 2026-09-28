@@ -1,0 +1,260 @@
+/* ── Layout principal ─────────────────────────────────────────────────────── */
+
+.layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────────── */
+
+.sidebar {
+  width: var(--ancho-sidebar);
+  min-width: var(--ancho-sidebar);
+  background: linear-gradient(180deg, #003087 0%, #002270 100%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 2px 0 12px rgba(0,0,0,0.15);
+}
+
+/* Marca / logo */
+.sidebar-marca {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-sm);
+  padding: var(--espacio-md) var(--espacio-md);
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  min-height: var(--alto-header);
+}
+
+.sidebar-logo {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.sidebar-marca-textos {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-titulo {
+  font-size: var(--tamanio-lg);
+  font-weight: 700;
+  color: var(--color-blanco);
+  white-space: nowrap;
+  letter-spacing: -0.2px;
+}
+
+.sidebar-subtitulo {
+  font-size: var(--tamanio-xs);
+  color: rgba(255,255,255,0.50);
+  white-space: nowrap;
+}
+
+/* Navegación */
+.sidebar-nav {
+  flex: 1;
+  padding: var(--espacio-md) var(--espacio-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px var(--espacio-md);
+  border-radius: var(--radio-md);
+  color: rgba(255,255,255,0.65);
+  font-size: var(--tamanio-sm);
+  font-weight: 500;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.sidebar-nav-item:hover {
+  background-color: rgba(255,255,255,0.09);
+  color: var(--color-blanco);
+}
+
+.sidebar-nav-item--activo {
+  background-color: rgba(255,255,255,0.14);
+  color: var(--color-blanco);
+  font-weight: 600;
+}
+
+.sidebar-nav-icono {
+  display: flex;
+  align-items: center;
+  width: 20px;
+  flex-shrink: 0;
+}
+
+/* Footer del sidebar */
+.sidebar-footer {
+  padding: var(--espacio-md);
+  border-top: 1px solid rgba(255,255,255,0.10);
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-sm);
+}
+
+.sidebar-admin {
+  display: flex;
+  align-items: center;
+  gap: var(--espacio-sm);
+}
+
+.sidebar-admin-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background-color: rgba(255,255,255,0.18);
+  color: var(--color-blanco);
+  font-weight: 700;
+  font-size: var(--tamanio-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid rgba(255,255,255,0.25);
+}
+
+.sidebar-admin-info {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-admin-nombre {
+  font-size: var(--tamanio-sm);
+  font-weight: 600;
+  color: var(--color-blanco);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidebar-admin-rol {
+  font-size: var(--tamanio-xs);
+  color: rgba(255,255,255,0.50);
+}
+
+.sidebar-btn-salir {
+  width: 100%;
+  padding: var(--espacio-sm) var(--espacio-md);
+  background-color: rgba(192, 57, 43, 0.85);
+  color: var(--color-blanco);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: var(--radio-md);
+  font-size: var(--tamanio-sm);
+  font-weight: 600;
+  transition: background-color 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--espacio-xs);
+}
+
+.sidebar-btn-salir:hover {
+  background-color: var(--color-acento);
+}
+
+/* ── Contenido principal ──────────────────────────────────────────────────── */
+
+.contenido {
+  flex: 1;
+  overflow-y: auto;
+  background-color: var(--color-gris-claro);
+}
+
+/* ── Responsividad ────────────────────────────────────────────────────────── */
+
+/* Tablet: sidebar se estrecha y oculta los textos */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 60px;
+    min-width: 60px;
+  }
+
+  .sidebar-marca-textos,
+  .sidebar-admin-info,
+  .sidebar-btn-salir {
+    display: none;
+  }
+
+  .sidebar-marca {
+    justify-content: center;
+    padding: var(--espacio-md) var(--espacio-sm);
+  }
+
+  .sidebar-nav-item {
+    justify-content: center;
+    padding: var(--espacio-sm);
+  }
+
+  .sidebar-nav-icono {
+    width: auto;
+    font-size: 20px;
+  }
+
+  .sidebar-footer {
+    align-items: center;
+  }
+
+  .sidebar-admin {
+    justify-content: center;
+  }
+}
+
+/* Móvil: sidebar se convierte en barra inferior */
+@media (max-width: 480px) {
+  .layout {
+    flex-direction: column-reverse;
+    height: 100dvh;
+  }
+
+  .sidebar {
+    width: 100%;
+    min-width: 100%;
+    height: 56px;
+    min-height: 56px;
+    flex-direction: row;
+    overflow: visible;
+  }
+
+  .sidebar-marca,
+  .sidebar-footer {
+    display: none;
+  }
+
+  .sidebar-nav {
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0 var(--espacio-md);
+    flex: 1;
+  }
+
+  .sidebar-nav-item {
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--espacio-xs) var(--espacio-sm);
+    font-size: var(--tamanio-xs);
+    border-radius: var(--radio-sm);
+  }
+
+  .sidebar-nav-icono {
+    font-size: 20px;
+    width: auto;
+  }
+
+  .contenido {
+    flex: 1;
+    overflow-y: auto;
+  }
+}

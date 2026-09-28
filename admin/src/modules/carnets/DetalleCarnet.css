@@ -1,0 +1,386 @@
+/* ── Detalle de carnet ────────────────────────────────────────────────────── */
+/* Las clases compartidas (.pagina, .pagina-header, .badge-estado, .btn)
+   viven en src/styles/shared.css                                              */
+
+/* ── Encabezado ── */
+.detalle-encabezado-izq {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--espacio-md);
+}
+
+.btn-volver {
+  padding: var(--espacio-xs) var(--espacio-sm);
+  background: none;
+  border: 1px solid var(--color-gris-medio);
+  border-radius: var(--radio-md);
+  color: var(--color-gris-secundario);
+  font-size: var(--tamanio-sm);
+  transition: all 0.15s;
+  white-space: nowrap;
+  margin-top: 4px;
+}
+
+.btn-volver:hover {
+  border-color: var(--color-primario);
+  color: var(--color-primario);
+}
+
+/* ── Grid de dos columnas asimétricas ── */
+.detalle-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: var(--espacio-lg);
+  align-items: start;
+}
+
+.detalle-columna-perfil {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-lg);
+}
+
+.detalle-columna-carreras {
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-lg);
+  flex-grow: 1;
+}
+
+/* ── Sub-grid de acciones e información y QR inferior ── */
+.sub-grid-acciones {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--espacio-lg);
+  align-items: start;
+}
+
+/* ── Secciones ── */
+.seccion {
+  background-color: var(--color-blanco);
+  border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-md);
+  border: 1px solid var(--color-gris-medio);
+  overflow: hidden;
+}
+
+.seccion-titulo {
+  font-size: var(--tamanio-sm);
+  font-weight: 600;
+  color: var(--color-gris-secundario);
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  padding: var(--espacio-md);
+  border-bottom: 1px solid var(--color-gris-medio);
+  background-color: var(--color-gris-claro);
+}
+
+.seccion-cuerpo {
+  padding: var(--espacio-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-md);
+}
+
+/* ── Perfil vertical ── */
+.seccion-perfil-vert {
+  padding: var(--espacio-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espacio-md);
+  width: 100%;
+}
+
+.foto-perfil-contenedor {
+  width: 140px;
+  height: 180px;
+  border-radius: var(--radio-md);
+  border: 2px solid var(--color-primario);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-gris-claro);
+  box-shrink: 0;
+  box-shadow: var(--sombra-md);
+}
+
+.foto-perfil {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.datos-perfil-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+}
+
+.seccion-descripcion {
+  font-size: var(--tamanio-sm);
+  color: var(--color-gris-secundario);
+}
+
+/* ── Filas de dato estructuradas con icono ── */
+.fila-dato {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: var(--espacio-sm) 0;
+  border-bottom: 1px solid var(--color-gris-medio);
+  width: 100%;
+}
+
+.fila-dato:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.fila-dato-icon {
+  color: var(--color-primario);
+  opacity: 0.8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.fila-dato-content {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+}
+
+.fila-dato-etiqueta {
+  font-size: var(--tamanio-xs);
+  font-weight: 600;
+  color: var(--color-gris-deshabilitado);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+
+.fila-dato-valor {
+  font-size: var(--tamanio-sm);
+  color: var(--color-gris-texto);
+  font-weight: 500;
+  word-break: break-word;
+}
+
+/* ── Estado actual ── */
+.estado-actual {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.estado-actual-etiqueta {
+  font-size: var(--tamanio-sm);
+  color: var(--color-gris-secundario);
+}
+
+.estado-info {
+  padding: var(--espacio-sm) var(--espacio-md);
+  border-radius: var(--radio-md);
+  font-size: var(--tamanio-sm);
+}
+
+.estado-info--activo {
+  background-color: var(--color-exito-bg);
+  color: var(--color-exito);
+}
+
+.estado-info--habilitado {
+  background-color: var(--color-habilitado-bg);
+  color: var(--color-habilitado);
+}
+
+.estado-info--inactivo {
+  background-color: var(--color-advertencia-bg);
+  color: var(--color-advertencia);
+}
+
+/* ── Confirmación inline ── */
+.confirmacion {
+  background-color: var(--color-advertencia-bg);
+  border: 1px solid var(--color-advertencia);
+  border-radius: var(--radio-md);
+  padding: var(--espacio-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-sm);
+}
+
+.confirmacion-texto {
+  font-size: var(--tamanio-sm);
+  color: var(--color-advertencia);
+}
+
+.confirmacion-botones {
+  display: flex;
+  gap: var(--espacio-sm);
+  justify-content: flex-end;
+}
+
+/* ── QR placeholder ── */
+.qr-contenedor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espacio-md);
+}
+
+.qr-placeholder {
+  width: 140px;
+  height: 140px;
+  padding: var(--espacio-sm);
+  background-color: var(--color-blanco);
+  border: 2px solid var(--color-gris-texto);
+  border-radius: var(--radio-sm);
+}
+
+.qr-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  width: 100%;
+  height: 100%;
+}
+
+.qr-celda {
+  background-color: var(--color-gris-texto);
+  border-radius: 1px;
+}
+
+.qr-datos {
+  text-align: center;
+  font-size: var(--tamanio-sm);
+  color: var(--color-gris-secundario);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* ── No encontrado ── */
+.detalle-no-encontrado {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--espacio-md);
+  padding: var(--espacio-xl);
+  color: var(--color-gris-secundario);
+}
+
+/* ── Modal Accion ── */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--espacio-md);
+  backdrop-filter: blur(2px);
+}
+
+.modal-contenedor {
+  background-color: var(--color-blanco);
+  border-radius: var(--radio-lg);
+  box-shadow: var(--sombra-lg);
+  max-width: 500px;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--color-gris-medio);
+  animation: modalSlideUp 0.2s ease-out;
+}
+
+@keyframes modalSlideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  padding: var(--espacio-md);
+  border-bottom: 1px solid var(--color-gris-medio);
+  background-color: var(--color-gris-claro);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-titulo {
+  font-size: var(--tamanio-md);
+  font-weight: 600;
+  color: var(--color-gris-texto);
+  margin: 0;
+}
+
+.modal-cuerpo {
+  padding: var(--espacio-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--espacio-md);
+}
+
+.modal-acciones {
+  padding: var(--espacio-md);
+  border-top: 1px solid var(--color-gris-medio);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--espacio-sm);
+  background-color: var(--color-gris-claro);
+}
+
+/* ── Responsividad ────────────────────────────────────────────────────────── */
+
+/* Pantalla mediana (Tablets grandes / Laptops chicas): Colapsar a 1 columna */
+@media (max-width: 1024px) {
+  .detalle-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Pantallas pequeñas (Móviles / Tablets chicas): Colapsar sub-grid de acciones y apilar cabecera */
+@media (max-width: 768px) {
+  .pagina-header {
+    flex-direction: column;
+    gap: var(--espacio-sm);
+    align-items: flex-start;
+  }
+
+  .detalle-encabezado-izq {
+    flex-direction: column;
+    gap: var(--espacio-sm);
+  }
+
+  .sub-grid-acciones {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-acciones {
+    flex-direction: column-reverse;
+  }
+
+  .modal-acciones .btn {
+    width: 100%;
+  }
+}
+
+.tabla-fila.fila-seleccionada {
+  background-color: rgba(26, 54, 93, 0.08) !important;
+  box-shadow: inset 4px 0 0 0 var(--color-primario);
+}
