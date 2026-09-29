@@ -30,7 +30,7 @@ export default class AuthEstudianteController {
         }).toString(),
       })
       
-      const tokenData = await tokenResponse.json()
+      const tokenData: any = await tokenResponse.json()
       if (!tokenResponse.ok) {
         console.error('AGETIC Error:', tokenData)
         return response.badRequest({ error: 'No se pudo validar el inicio de sesión con Ciudadanía Digital' })
@@ -70,68 +70,89 @@ export default class AuthEstudianteController {
       const idPersona = persona.id_persona
       const hashedDeviceToken = createHash('sha256').update(deviceToken).digest('hex')
 
-      // 4. Buscar carnet y verificar que esté en estado 'pendiente' con bloqueo FOR UPDATE
-      const carnet = await Carnet.query({ client: trx })
+      // 4. Buscar carrera habilitada automáticamente (Matriculada y Regular)
+      const carreraHabilitada = await trx
+        .from('public.estudiantes as e')
+        .join('matricula.pagos as mp', (q) => {
+          q.on('e.id_persona', 'mp.id_persona').andOn('e.id_carrera', 'mp.id_carrera')
+        })
+        .where('e.id_persona', idPersona)
+        .where('e.estado_pago', true)
+        .where('mp.estado_pago', true)
+        .select('e.id_carrera as idCarrera', 'e.id_estudiante as idEstudianteAcademico')
+        .first()
+
+      if (!carreraHabilitada) {
+        await trx.rollback()
+        return response.forbidden({ error: 'No estás habilitado académicamente en ninguna carrera. Asegúrate de haber pagado tu matrícula de la gestión actual.' })
+      }
+
+      const { idCarrera, idEstudianteAcademico } = carreraHabilitada
+
+      // 5. Buscar o crear el registro de carnet para esta persona y carrera
+      let carnet = await Carnet.query({ client: trx })
         .where('idPersona', idPersona)
-        .where('estado', 'pendiente')
+        .where('idCarrera', idCarrera)
         .forUpdate()
         .first()
 
       if (!carnet) {
-        // Verificar si ya fue activado por este mismo dispositivo (re-intento idempotente)
-        const carnetActivo = await Carnet.query({ client: trx })
+        // Reusar fila vacía si existiera de sistemas antiguos
+        const emptyCarnet = await Carnet.query({ client: trx })
           .where('idPersona', idPersona)
-          .where('estado', 'activo')
-          .where('deviceToken', hashedDeviceToken)
+          .whereNull('idCarrera')
+          .forUpdate()
           .first()
-
-        if (carnetActivo) {
-          // Generar nuevo OAT para recuperar la sesión
-          const token = await Carnet.accessTokens.create(carnetActivo, ['*'], {
-            expiresIn: '2 years'
-          })
-          await trx.commit()
-          return {
-            token: token.value!.release(),
-            carnetId: carnetActivo.id,
-            estado: carnetActivo.estado,
-            expiraEn: carnetActivo.expiraEn,
-            recuperado: true
-          }
+          
+        if (emptyCarnet) {
+          carnet = emptyCarnet
+        } else {
+          carnet = new Carnet()
+          carnet.idPersona = idPersona
+          carnet.estado = 'inactivo'
         }
-
-        await trx.rollback()
-        return response.badRequest({
-          error: 'No se encontró un carnet pendiente de activación para ti. Acuda a la DTIC para solicitarlo.'
-        })
       }
 
-      // 5. Verificar si califica para primera emisión gratuita
+      // 6. Comprobar si ya estaba activo en este mismo dispositivo (Recuperación de sesión sin costo)
+      if (carnet.estado === 'activo' && carnet.deviceToken === hashedDeviceToken) {
+        const token = await Carnet.accessTokens.create(carnet, ['*'], { expiresIn: '2 years' })
+        await trx.commit()
+        return { 
+          token: token.value!.release(), 
+          carnetId: carnet.id, 
+          estado: carnet.estado, 
+          expiraEn: carnet.expiraEn, 
+          recuperado: true 
+        }
+      }
+
+      // 7. Verificar aranceles (si no es su primera emisión histórica)
       const carnetPrevio = await trx
         .from('public.app_registro')
         .where('id_persona', idPersona)
-        .whereNot('id', carnet.id)
+        .whereNot('id', carnet.id || 0)
         .where((q) => {
-          q.whereIn('estado', ['activo', 'inactivo']).orWhereNotNull('activado_en')
+          q.whereIn('estado', ['activo', 'inactivo', 'pendiente']).orWhereNotNull('activado_en')
         })
         .first()
-      const esPrimeraEmision = !carnetPrevio
+
+      const yaEmitidoAlgunaVez = carnet.activadoEn != null
+      const esPrimeraEmision = !carnetPrevio && !yaEmitidoAlgunaVez
 
       if (!esPrimeraEmision) {
-        // Verificar si el estudiante tiene un cobro de arancel (reposición 868) disponible
+        // Verificar si pagó el arancel de reposición (Trámite 868)
         const idRcobro = await this.activacionService.buscarCobroDisponible(idPersona, trx)
         if (!idRcobro) {
           await trx.rollback()
           return response.badRequest({
-            error: 'No se encontró un pago de arancel de reposición de carnet disponible para este estudiante o ya fue utilizado.'
+            error: 'Ya tuviste un carnet digital. Para reactivarlo en un nuevo dispositivo, necesitas pagar el arancel de reposición.'
           })
         }
-
-        // Registrar el uso del cobro para inhabilitarlo (quemar arancel 868)
-        await this.activacionService.registrarUsoCobro(idPersona, idRcobro, carnet.activadoPor || 0, trx)
+        // Quemar el arancel para que no se use de nuevo
+        await this.activacionService.registrarUsoCobro(idPersona, idRcobro, 0, trx)
       }
 
-      // 6. Activar el carnet
+      // 8. Activar el carnet directamente
       const activadoEn = DateTime.now()
       const expiraEn = activadoEn.plus({ years: 2 })
       const estudianteId = randomUUID()
@@ -142,14 +163,16 @@ export default class AuthEstudianteController {
       carnet.activadoEn = activadoEn
       carnet.expiraEn = expiraEn
       carnet.deviceToken = hashedDeviceToken
+      carnet.idCarrera = idCarrera
+      carnet.idEstudianteAcademico = idEstudianteAcademico
+      carnet.activadoPor = null // Activación 100% automática por el sistema
       await carnet.save()
 
-      // 7. Generar OAT para el estudiante (vigencia 2 años)
+      // 9. Generar OAT para el estudiante (vigencia 2 años)
       const token = await Carnet.accessTokens.create(carnet, ['*'], {
         expiresIn: '2 years'
       })
 
-      // Confirmar transacción
       await trx.commit()
 
       return {
