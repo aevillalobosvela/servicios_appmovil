@@ -9,25 +9,68 @@ export default class AuthEstudianteController {
   private activacionService = new ActivacionService()
 
   async activar({ request, response }: HttpContext) {
-    const { qrToken, deviceToken } = request.only(['qrToken', 'deviceToken'])
+    const { authCode, codeVerifier, deviceToken } = request.only(['authCode', 'codeVerifier', 'deviceToken'])
 
-    if (!qrToken || !deviceToken) {
-      return response.badRequest({ error: 'Se requieren qrToken y deviceToken' })
+    if (!authCode || !codeVerifier || !deviceToken) {
+      return response.badRequest({ error: 'Se requieren authCode, codeVerifier y deviceToken' })
     }
 
-    // 1. Validar criptográficamente el token QR de activación
-    const idPersona = this.activacionService.validarQrActivacion(qrToken)
-    if (!idPersona) {
-      return response.badRequest({ error: 'El código QR de activación es inválido o ha expirado' })
+    // 1. Intercambiar authCode por token de AGETIC
+    let idTokenBase64 = ''
+    try {
+      const tokenResponse = await fetch('https://proveedor.ciudadania.demo.agetic.gob.bo/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: process.env.AGETIC_CLIENT_ID || '',
+          redirect_uri: process.env.AGETIC_REDIRECT_URI || '',
+          code: authCode,
+          code_verifier: codeVerifier,
+        }).toString(),
+      })
+      
+      const tokenData = await tokenResponse.json()
+      if (!tokenResponse.ok) {
+        console.error('AGETIC Error:', tokenData)
+        return response.badRequest({ error: 'No se pudo validar el inicio de sesión con Ciudadanía Digital' })
+      }
+      idTokenBase64 = tokenData.id_token
+    } catch (e) {
+      return response.badRequest({ error: 'Error de comunicación con Ciudadanía Digital' })
+    }
+
+    // 2. Extraer CI del id_token
+    let ci = ''
+    try {
+      const payload = JSON.parse(Buffer.from(idTokenBase64.split('.')[1], 'base64').toString())
+      ci = payload.preferred_username || payload.uid || payload.documento_identidad || payload.sub
+      if (!ci) {
+        return response.badRequest({ error: 'El proveedor de identidad no devolvió un Carnet de Identidad válido' })
+      }
+    } catch(e) {
+      return response.badRequest({ error: 'Formato de token de identidad inválido' })
     }
 
     // Iniciar transacción de base de datos
     const trx = await db.transaction()
 
     try {
+      // 3. Obtener idPersona desde el CI
+      const persona = await trx
+        .from('public.personas')
+        .where('dip', ci)
+        .first()
+
+      if (!persona) {
+        await trx.rollback()
+        return response.notFound({ error: 'Estudiante no encontrado en el sistema académico con el CI: ' + ci })
+      }
+      
+      const idPersona = persona.id_persona
       const hashedDeviceToken = createHash('sha256').update(deviceToken).digest('hex')
 
-      // 2. Buscar carnet y verificar que esté en estado 'pendiente' con bloqueo FOR UPDATE
+      // 4. Buscar carnet y verificar que esté en estado 'pendiente' con bloqueo FOR UPDATE
       const carnet = await Carnet.query({ client: trx })
         .where('idPersona', idPersona)
         .where('estado', 'pendiente')
@@ -59,25 +102,11 @@ export default class AuthEstudianteController {
 
         await trx.rollback()
         return response.badRequest({
-          error: 'Este código QR ya ha sido utilizado o no se encuentra en espera de activación'
+          error: 'No se encontró un carnet pendiente de activación para ti. Acuda a la DTIC para solicitarlo.'
         })
       }
 
-      // 3. Obtener el C.I. (dip) de la persona desde public.personas usando la transacción
-      const persona = await trx
-        .from('public.personas')
-        .where('id_persona', idPersona)
-        .first()
-
-      if (!persona) {
-        await trx.rollback()
-        return response.notFound({ error: 'Estudiante no encontrado en el sistema académico' })
-      }
-
-      // 4. Registrar el dispositivo en el carnet
-      // (hashedDeviceToken ya fue calculado al inicio)
-
-      // Verificar si califica para primera emisión gratuita (nunca ha tenido carnet activo, inactivo o con fecha de activación)
+      // 5. Verificar si califica para primera emisión gratuita
       const carnetPrevio = await trx
         .from('public.app_registro')
         .where('id_persona', idPersona)
@@ -102,7 +131,7 @@ export default class AuthEstudianteController {
         await this.activacionService.registrarUsoCobro(idPersona, idRcobro, carnet.activadoPor || 0, trx)
       }
 
-      // 5. Activar el carnet
+      // 6. Activar el carnet
       const activadoEn = DateTime.now()
       const expiraEn = activadoEn.plus({ years: 2 })
       const estudianteId = randomUUID()
@@ -115,7 +144,7 @@ export default class AuthEstudianteController {
       carnet.deviceToken = hashedDeviceToken
       await carnet.save()
 
-      // 6. Generar OAT para el estudiante (vigencia 2 años)
+      // 7. Generar OAT para el estudiante (vigencia 2 años)
       const token = await Carnet.accessTokens.create(carnet, ['*'], {
         expiresIn: '2 years'
       })

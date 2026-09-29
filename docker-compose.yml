@@ -29,6 +29,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_DATABASE: ${DB_DATABASE}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      AGETIC_CLIENT_ID: ${AGETIC_CLIENT_ID}
+      AGETIC_REDIRECT_URI: ${AGETIC_REDIRECT_URI}
     healthcheck:
       test: [ "CMD-SHELL", "node -e \"const http = require('http'); const req = http.request({host: 'localhost', port: 3333, path: '/api/v1', timeout: 2000}, (res) => { process.exit(res.statusCode === 404 || res.statusCode === 200 ? 0 : 1); }); req.on('error', () => process.exit(1)); req.end();\"" ]
       interval: 30s
