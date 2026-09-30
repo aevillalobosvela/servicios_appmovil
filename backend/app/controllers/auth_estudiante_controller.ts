@@ -16,7 +16,7 @@ export default class AuthEstudianteController {
     }
 
     // 1. Intercambiar authCode por token de AGETIC
-    let idTokenBase64 = ''
+    let tokenData: any = null
     try {
       const tokenResponse = await fetch('https://proveedor.ciudadania.demo.agetic.gob.bo/token', {
         method: 'POST',
@@ -30,26 +30,53 @@ export default class AuthEstudianteController {
         }).toString(),
       })
       
-      const tokenData: any = await tokenResponse.json()
+      tokenData = await tokenResponse.json()
       if (!tokenResponse.ok) {
         console.error('AGETIC Error:', tokenData)
         return response.badRequest({ error: 'No se pudo validar el inicio de sesión con Ciudadanía Digital' })
       }
-      idTokenBase64 = tokenData.id_token
     } catch (e) {
       return response.badRequest({ error: 'Error de comunicación con Ciudadanía Digital' })
     }
 
-    // 2. Extraer CI del id_token
+    // 2. Extraer CI usando el endpoint userinfo de AGETIC
     let ci = ''
     try {
-      const payload = JSON.parse(Buffer.from(idTokenBase64.split('.')[1], 'base64').toString())
-      ci = payload.preferred_username || payload.uid || payload.documento_identidad || payload.sub
+      const userInfoResponse = await fetch('https://proveedor.ciudadania.demo.agetic.gob.bo/me', {
+        headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
+      })
+      if (!userInfoResponse.ok) {
+        const errorText = await userInfoResponse.text()
+        console.error('==== ERROR USERINFO RESPONSE ====', userInfoResponse.status, errorText)
+        throw new Error('Userinfo endpoint returned ' + userInfoResponse.status)
+      }
+      const userInfo: any = await userInfoResponse.json()
+      console.log('==== AGETIC USERINFO RECIBIDO ====', JSON.stringify(userInfo, null, 2))
+      
+      ci = userInfo?.profile?.documento_identidad?.numero_documento || 
+           userInfo?.documento_identidad?.numero_documento || 
+           userInfo?.numero_documento || 
+           userInfo?.ci || 
+           userInfo?.preferred_username || 
+           userInfo?.uid || 
+           userInfo?.sub
+           
+      // Limpiar el CI si la base de datos lo tiene sin guion o sin sufijo de ser necesario.
+      // Por ahora lo pasamos tal cual viene de AGETIC (Ej: 2235394978-6T)
+
+      
+      // Si a pesar de todo, preferred_username o sub es un UUID, intentamos filtrar
+      if (ci && ci.length > 20) {
+         // Es un UUID, no nos sirve como CI. Forzamos error para ver el log.
+         ci = '' 
+      }
+
       if (!ci) {
-        return response.badRequest({ error: 'El proveedor de identidad no devolvió un Carnet de Identidad válido' })
+        return response.badRequest({ error: 'El proveedor de identidad no devolvió un Carnet de Identidad válido en /userinfo' })
       }
     } catch(e) {
-      return response.badRequest({ error: 'Formato de token de identidad inválido' })
+      console.error('==== ERROR OBTENIENDO USERINFO ====', e)
+      return response.badRequest({ error: 'Error al consultar el perfil de usuario de Ciudadanía Digital' })
     }
 
     // Iniciar transacción de base de datos
