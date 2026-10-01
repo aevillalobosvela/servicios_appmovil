@@ -1,6 +1,5 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import db from '@adonisjs/lucid/services/db'
-import { DateTime } from 'luxon'
 import ActivacionService from '#services/activacion_service'
 import Carnet from '#models/carnet'
 import { FACULTY_MAPPING } from '#helpers/faculty_helper'
@@ -29,137 +28,153 @@ export default class AdminCarnetController {
     const search = request.input('search')
     const page = Number(request.input('page', 1))
     const limit = Number(request.input('limit', 10))
-
-    // Estado consolidado: activo > pendiente > expirado > inactivo (reutilizable)
-    const casoEstado = `
-      CASE
-        WHEN EXISTS (SELECT 1 FROM public.app_registro cr WHERE cr.id_persona = p.id_persona AND cr.estado = 'activo')    THEN 'activo'
-        WHEN EXISTS (SELECT 1 FROM public.app_registro cr WHERE cr.id_persona = p.id_persona AND cr.estado = 'pendiente') THEN 'pendiente'
-        WHEN EXISTS (SELECT 1 FROM public.app_registro cr WHERE cr.id_persona = p.id_persona AND cr.estado = 'expirado')  THEN 'expirado'
-        ELSE 'inactivo'
-      END
-    `
-
-    // 1. Conteo de personas únicas con el filtro de estado consolidado
-    const countQuery = db
-      .from('public.personas as p')
-      .whereExists(
-        db.from('public.estudiantes as e').whereRaw('e.id_persona = p.id_persona')
-      )
-
-    if (estado) {
-      countQuery.where(db.raw(casoEstado), estado)
-    }
-
-    if (search) {
-      const terminoLimpio = search.trim()
-      const esNumerico = /^\d+$/.test(terminoLimpio)
-      countQuery.where((q) => {
-        if (esNumerico) {
-          q.where('p.dip', terminoLimpio)
-        } else {
-          q.whereILike('p.nombre_completo', `%${terminoLimpio}%`)
-            .orWhereILike('p.dip', `%${terminoLimpio}%`)
-        }
-      })
-    }
-
-    const countResult = await countQuery.count({ total: '*' })
-    const total = Number(countResult[0].total)
-
-    // 2. Consulta de datos paginada — una fila por persona
-    const query = db
-      .from('public.personas as p')
-      .whereExists(
-        db.from('public.estudiantes as e').whereRaw('e.id_persona = p.id_persona')
-      )
-      .select(
-        'p.id_persona as idPersona',
-        'p.dip',
-        'p.nombre_completo as nombreCompleto',
-        'p.correo',
-        'p.digital',
-        db.raw(`(${casoEstado}) AS estado`),
-        db.raw(`(
-          SELECT COUNT(DISTINCT e2.id_carrera)
-          FROM public.estudiantes e2
-          WHERE e2.id_persona = p.id_persona
-        ) as "totalCarreras"`),
-        db.raw(`(
-          SELECT COUNT(*)
-          FROM public.app_registro cr2
-          WHERE cr2.id_persona = p.id_persona AND cr2.estado = 'activo'
-        ) as "carnerasActivas"`)
-      )
-
-    if (estado) {
-      query.where(db.raw(casoEstado), estado)
-    }
-
-    if (search) {
-      const terminoLimpio = search.trim()
-      const esNumerico = /^\d+$/.test(terminoLimpio)
-      query.where((q) => {
-        if (esNumerico) {
-          q.where('p.dip', terminoLimpio)
-        } else {
-          q.whereILike('p.nombre_completo', `%${terminoLimpio}%`)
-            .orWhereILike('p.dip', `%${terminoLimpio}%`)
-        }
-      })
-    }
-
     const offset = (page - 1) * limit
-    const dataRows = await query.orderBy('p.nombre_completo', 'asc').limit(limit).offset(offset)
 
-    // Consultas batch eficientes de habilitación y cobros solo para las 10 personas en pantalla
-    const ids = dataRows.map((row: any) => Number(row.idPersona))
+    // ── Construcción dinámica del filtro WHERE ─────────────────────────────────
+    // Se construye una sola vez y se reutiliza en el CTE para no duplicar lógica.
+    const whereFragments: string[] = [
+      // Solo personas que sean estudiantes
+      `EXISTS (SELECT 1 FROM public.estudiantes e WHERE e.id_persona = p.id_persona)`,
+    ]
+    const bindings: any[] = []
+
+    if (estado === 'activo') {
+      whereFragments.push(`EXISTS (SELECT 1 FROM public.app_registro cr WHERE cr.id_persona = p.id_persona AND cr.estado = 'activo')`)
+    } else if (estado === 'expirado') {
+      whereFragments.push(`EXISTS    (SELECT 1 FROM public.app_registro cr  WHERE cr.id_persona  = p.id_persona AND cr.estado  = 'expirado')`)
+      whereFragments.push(`NOT EXISTS (SELECT 1 FROM public.app_registro cr2 WHERE cr2.id_persona = p.id_persona AND cr2.estado = 'activo')`)
+    } else if (estado === 'inactivo') {
+      whereFragments.push(`NOT EXISTS (SELECT 1 FROM public.app_registro cr WHERE cr.id_persona = p.id_persona AND cr.estado IN ('activo', 'expirado'))`)
+    }
+
+    if (search) {
+      const terminoLimpio = search.trim()
+      const esNumerico = /^\d+$/.test(terminoLimpio)
+      if (esNumerico) {
+        whereFragments.push(`p.dip = ?`)
+        bindings.push(terminoLimpio)
+      } else {
+        whereFragments.push(`(p.nombre_completo ILIKE ? OR p.dip ILIKE ?)`)
+        bindings.push(`%${terminoLimpio}%`, `%${terminoLimpio}%`)
+      }
+    }
+
+    const whereSql = whereFragments.join(' AND ')
+
+    // ── CTE único: count + datos paginados en una sola ida a la BD ────────────
+    //
+    // window function COUNT(*) OVER () calcula el total de filas que cumplan el
+    // filtro sin necesidad de una segunda query de conteo. PostgreSQL lo evalúa
+    // sobre el mismo conjunto de filas ya filtrado, sin coste adicional.
+    //
+    // Los agregados de app_registro (estado consolidado, carreras activas) se
+    // calculan en un LEFT JOIN con GROUP BY una única vez para todas las personas
+    // del resultado, en lugar de una correlated subquery por fila.
+    //
+    // Los aggregados de estudiantes (totalCarreras) también se pre-agregan en un
+    // LEFT JOIN para evitar una segunda correlated subquery por fila.
+    const cteResult = await db.rawQuery(
+      `
+      WITH resumen_registro AS (
+        -- Pre-agrega app_registro por persona: una fila por id_persona.
+        -- Usa el índice idx_app_registro_persona_estado.
+        SELECT
+          id_persona,
+          COUNT(*) FILTER (WHERE estado = 'activo')   AS carreras_activas,
+          BOOL_OR(estado = 'activo')                  AS tiene_activo,
+          BOOL_OR(estado = 'expirado')                AS tiene_expirado
+        FROM public.app_registro
+        GROUP BY id_persona
+      ),
+      resumen_carreras AS (
+        -- Pre-agrega estudiantes por persona: total de carreras únicas.
+        SELECT id_persona, COUNT(DISTINCT id_carrera) AS total_carreras
+        FROM public.estudiantes
+        GROUP BY id_persona
+      ),
+      base AS (
+        SELECT
+          p.id_persona,
+          p.dip,
+          p.nombre_completo,
+          p.correo,
+          CASE
+            WHEN rr.tiene_activo   THEN 'activo'
+            WHEN rr.tiene_expirado THEN 'expirado'
+            ELSE 'inactivo'
+          END                               AS estado,
+          COALESCE(rc.total_carreras, 0)    AS total_carreras,
+          COALESCE(rr.carreras_activas, 0)  AS carreras_activas,
+          COUNT(*) OVER ()                  AS total_count
+        FROM public.personas p
+        LEFT JOIN resumen_registro rr ON rr.id_persona = p.id_persona
+        LEFT JOIN resumen_carreras rc ON rc.id_persona = p.id_persona
+        WHERE ${whereSql}
+      )
+      SELECT * FROM base
+      ORDER BY nombre_completo ASC
+      LIMIT ? OFFSET ?
+      `,
+      [...bindings, limit, offset]
+    )
+
+    const dataRows: any[] = cteResult.rows
+    const total = dataRows.length > 0 ? Number(dataRows[0].total_count) : 0
+    const ids = dataRows.map((row: any) => Number(row.id_persona))
+
+    // ── Queries batch paralelas para los ≤10 IDs de esta página ───────────────
+    // Se lanzan simultáneamente con Promise.all para eliminar la latencia serial.
     const pagosMap: Record<number, number> = {}
     const habilitadasMap: Record<number, number> = {}
 
     if (ids.length > 0) {
-      // 1. Pagos 868 disponibles (sin usar en emisiones)
-      const pagosInfo = await db
-        .from('tesoro.rcobros as rc')
-        .join('tesoro.rtramites as rt', 'rc.id_rtramite', 'rt.id_rtramite')
-        .whereIn('rc.id__persona', ids)
-        .where('rt.cod_rtramite', '868')
-        .whereNotExists(
-          db.from('public.emisiones_certificacion as ec').whereRaw('ec.id_rcobro = rc.id_rcobro')
-        )
-        .select('rc.id__persona as idPersona')
-        .count('* as total')
-        .groupBy('rc.id__persona')
+      const [pagosInfo, habilitadasInfo] = await Promise.all([
+        // Pagos 868 disponibles (arancel de reposición no usado)
+        db
+          .from('tesoro.rcobros as rc')
+          .join('tesoro.rtramites as rt', 'rc.id_rtramite', 'rt.id_rtramite')
+          .whereIn('rc.id__persona', ids)
+          .where('rt.cod_rtramite', '868')
+          .whereNotExists(
+            db.from('public.emisiones_certificacion as ec').whereRaw('ec.id_rcobro = rc.id_rcobro')
+          )
+          .select('rc.id__persona as idPersona')
+          .count('* as total')
+          .groupBy('rc.id__persona'),
+
+        // Carreras con matrícula habilitada (estudiante + pago al día)
+        db
+          .from('public.estudiantes as e')
+          .join('matricula.pagos as mp', (q) => {
+            q.on('e.id_persona', 'mp.id_persona').andOn('e.id_carrera', 'mp.id_carrera')
+          })
+          .whereIn('e.id_persona', ids)
+          .where('e.estado_pago', true)
+          .where('mp.estado_pago', true)
+          .select('e.id_persona as idPersona')
+          .count('* as total')
+          .groupBy('e.id_persona'),
+      ])
 
       pagosInfo.forEach((item: any) => {
         pagosMap[Number(item.idPersona)] = Number(item.total)
       })
-
-      // 2. Carreras con matrícula al día
-      const habilitadasInfo = await db
-        .from('public.estudiantes as e')
-        .join('matricula.pagos as mp', (q) => {
-          q.on('e.id_persona', 'mp.id_persona').andOn('e.id_carrera', 'mp.id_carrera')
-        })
-        .whereIn('e.id_persona', ids)
-        .where('e.estado_pago', true)
-        .where('mp.estado_pago', true)
-        .select('e.id_persona as idPersona')
-        .count('* as total')
-        .groupBy('e.id_persona')
-
       habilitadasInfo.forEach((item: any) => {
         habilitadasMap[Number(item.idPersona)] = Number(item.total)
       })
     }
 
     const rows = dataRows.map((row: any) => {
-      const idPers = Number(row.idPersona)
+      const idPers = Number(row.id_persona)
       return {
-        ...row,
-        digital: row.dip ? `https://saga.uto.edu.bo/digital/${row.dip}.jpg` : '',
-        totalCarreras: Number(row.totalCarreras),
-        carnerasActivas: Number(row.carnerasActivas),
+        idPersona:           idPers,
+        dip:                 row.dip,
+        nombreCompleto:      row.nombre_completo,
+        correo:              row.correo,
+        digital:             row.dip ? `https://saga.uto.edu.bo/digital/${row.dip}.jpg` : '',
+        estado:              row.estado,
+        totalCarreras:       Number(row.total_carreras),
+        carnerasActivas:     Number(row.carreras_activas),
         carrerasHabilitadas: habilitadasMap[idPers] || 0,
         pagos868Disponibles: pagosMap[idPers] || 0,
       }
@@ -168,12 +183,12 @@ export default class AdminCarnetController {
     return {
       meta: {
         total,
-        perPage: limit,
+        perPage:     limit,
         currentPage: page,
-        lastPage: Math.ceil(total / limit),
-        firstPage: 1,
+        lastPage:    Math.ceil(total / limit) || 1,
+        firstPage:   1,
       },
-      data: rows
+      data: rows,
     }
   }
 
@@ -368,7 +383,6 @@ export default class AdminCarnetController {
       let carnetId = 0
       let activadoEn = null
       let expiraEn = null
-      let qrBase64 = null
       let activadoPor = null
       let updatedAt = null
 
@@ -379,41 +393,6 @@ export default class AdminCarnetController {
         expiraEn = carnet.expira_en
         activadoPor = carnet.activado_por
         updatedAt = carnet.updated_at
-
-        // Validar expiración si está pendiente
-        if (estado === 'pendiente') {
-          if (!expiraEn) {
-            const updatedAtTime = updatedAt ? new Date(updatedAt).getTime() : Date.now()
-            const expiresAt = updatedAtTime + 30 * 60 * 1000
-            if (Date.now() > expiresAt) {
-              await db
-                .from('public.app_registro')
-                .where('id', carnetId)
-                .update({ estado: 'inactivo', expira_en: null, activado_por: null, activado_en: null, id_carrera: null, id_estudiante_academico: null })
-              estado = 'inactivo'
-              expiraEn = null
-            } else {
-              await db
-                .from('public.app_registro')
-                .where('id', carnetId)
-                .update({ expira_en: new Date(expiresAt) })
-              expiraEn = new Date(expiresAt)
-              qrBase64 = await this.activacionService.obtenerQrBase64(personaId, expiresAt)
-            }
-          } else {
-            const expiraEnTime = new Date(expiraEn).getTime()
-            if (Date.now() > expiraEnTime) {
-              await db
-                .from('public.app_registro')
-                .where('id', carnetId)
-                .update({ estado: 'inactivo', expira_en: null, activado_por: null, activado_en: null, id_carrera: null, id_estudiante_academico: null })
-              estado = 'inactivo'
-              expiraEn = null
-            } else {
-              qrBase64 = await this.activacionService.obtenerQrBase64(personaId, expiraEnTime)
-            }
-          }
-        }
       }
 
       listadoCarreras.push({
@@ -435,7 +414,6 @@ export default class AdminCarnetController {
         activadoEn,
         expiraEn,
         activadoPor,
-        qr: qrBase64,
         updatedAt
       })
     }
@@ -444,8 +422,6 @@ export default class AdminCarnetController {
     let estadoConsolidado = 'inactivo'
     if (listadoCarreras.some(c => c.estado === 'activo')) {
       estadoConsolidado = 'activo'
-    } else if (listadoCarreras.some(c => c.estado === 'pendiente')) {
-      estadoConsolidado = 'pendiente'
     } else if (listadoCarreras.some(c => c.estado === 'expirado')) {
       estadoConsolidado = 'expirado'
     }
@@ -468,99 +444,7 @@ export default class AdminCarnetController {
     }
   }
 
-  async generarActivacion({ request, response, auth }: HttpContext) {
-    const { idPersona, idCarrera, idEstudiante } = request.only(['idPersona', 'idCarrera', 'idEstudiante'])
-    if (!idPersona || !idCarrera || !idEstudiante) {
-      return response.badRequest({ error: 'Se requiere idPersona, idCarrera e idEstudiante' })
-    }
 
-    const personaId = Number(idPersona)
-    const carreraId = Number(idCarrera)
-    const estudianteIdAcademico = Number(idEstudiante)
-    if (isNaN(personaId) || isNaN(carreraId) || isNaN(estudianteIdAcademico)) {
-      return response.badRequest({ error: 'Los IDs proporcionados deben ser números válidos' })
-    }
-
-    // Validar habilitación académica de la carrera seleccionada
-    const pagoMatricula = await db
-      .from('matricula.pagos')
-      .where('id_persona', personaId)
-      .where('id_carrera', carreraId)
-      .where('estado_pago', true)
-      .first()
-
-    if (!pagoMatricula) {
-      return response.badRequest({ error: 'El estudiante no cuenta con la matrícula pagada en la carrera seleccionada.' })
-    }
-
-    const pagoEstudiante = await db
-      .from('public.estudiantes')
-      .where('id_persona', personaId)
-      .where('id_carrera', carreraId)
-      .where('estado_pago', true)
-      .first()
-
-    if (!pagoEstudiante) {
-      return response.badRequest({ error: 'El estudiante tiene una matrícula irregular en la carrera seleccionada.' })
-    }
-
-    // Verificar si califica para primera emisión gratuita (nunca ha tenido carnet activo, inactivo o con fecha de activación)
-    const carnetPrevio = await db
-      .from('public.app_registro')
-      .where('id_persona', personaId)
-      .where((q) => {
-        q.whereIn('estado', ['activo', 'inactivo']).orWhereNotNull('activado_en')
-      })
-      .first()
-    const esPrimeraEmision = !carnetPrevio
-
-    if (!esPrimeraEmision) {
-      // Verificar si el estudiante tiene un cobro disponible del trámite 868 (reposición de carnet)
-      const idRcobro = await this.activacionService.buscarCobroDisponible(personaId)
-      if (!idRcobro) {
-        return response.badRequest({
-          error: 'No se encontró un pago de arancel de reposición de carnet disponible para este estudiante o ya fue utilizado.'
-        })
-      }
-    }
-
-    const qrBase64 = await this.activacionService.generarQrActivacion(personaId)
-
-    // Buscar si ya existe una credencial para esa carrera
-    let carnet = await Carnet.query()
-      .where('idPersona', personaId)
-      .where('idCarrera', carreraId)
-      .first()
-
-    if (!carnet) {
-      // Reusar fila vacía de carnet si existe
-      const emptyCarnet = await Carnet.query()
-        .where('idPersona', personaId)
-        .whereNull('idCarrera')
-        .first()
-
-      if (emptyCarnet) {
-        carnet = emptyCarnet
-      } else {
-        // Crear un nuevo registro
-        carnet = new Carnet()
-        carnet.idPersona = personaId
-        carnet.estado = 'inactivo'
-      }
-    }
-
-    const adminUser = auth.getUserOrFail()
-    const expiraEn = DateTime.now().plus({ minutes: 30 })
-
-    carnet.estado = 'pendiente'
-    carnet.activadoPor = adminUser.id
-    carnet.idCarrera = carreraId
-    carnet.idEstudianteAcademico = estudianteIdAcademico
-    carnet.expiraEn = expiraEn
-    await carnet.save()
-
-    return { qr: qrBase64 }
-  }
 
   async desactivar({ params, response }: HttpContext) {
     // Buscar el carnet específico por su clave primaria ID

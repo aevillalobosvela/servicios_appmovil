@@ -159,7 +159,7 @@ export default class AuthEstudianteController {
         .where('id_persona', idPersona)
         .whereNot('id', carnet.id || 0)
         .where((q) => {
-          q.whereIn('estado', ['activo', 'inactivo', 'pendiente']).orWhereNotNull('activado_en')
+          q.whereIn('estado', ['activo', 'inactivo']).orWhereNotNull('activado_en')
         })
         .first()
 

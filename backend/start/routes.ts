@@ -65,7 +65,6 @@ router
         
         router.get('carnets', [AdminCarnetController, 'index'])
         router.get('carnets/:id', [AdminCarnetController, 'show'])
-        router.post('carnets/activar', [AdminCarnetController, 'generarActivacion'])
         router.post('carnets/:id/desactivar', [AdminCarnetController, 'desactivar'])
 
         // Push Notifications Admin Endpoints
