@@ -1,94 +1,54 @@
-# Arquitectura — Servicios Digitales UTO
+# Arquitectura del Sistema: Servicios Digitales UTO
 
-Sistema de Administración de Servicios y Carnet Universitario Digital de la **Universidad Técnica de Oruro (UTO)**, desarrollado por la DTIC.
+El sistema de "Servicios Digitales UTO" es una solución centralizada y segura diseñada para la Universidad Técnica de Oruro (UTO) con el objetivo primario de emitir y gestionar el **Carnet Digital Universitario**.
 
----
+## 1. Componentes del Ecosistema
 
-## Visión General
+El ecosistema está conformado por tres componentes principales:
 
-El ecosistema se compone de tres aplicaciones independientes que se comunican a través de una API REST central:
+### 1.1. Aplicación Móvil (React Native + Expo)
+- **Rol:** Cliente final para el estudiante.
+- **Responsabilidades:** 
+  - Solicitar autenticación inicial al estudiante utilizando **Ciudadanía Digital (AGETIC)**.
+  - Almacenar tokens seguros en el dispositivo.
+  - Presentar la credencial digital, la cual cuenta con características anti-fraude (reloj sincronizado local, micro-animaciones, bloqueo de capturas de pantalla, brillo automático).
+  - Proveer validación offline al portador mediante la generación de un Código QR dinámico o Código de Verificación Alfanumérico, que expira en minutos.
 
-| Subproyecto | Carpeta / Repositorio | Tecnología | Rol |
-|---|---|---|---|
-| App Móvil | `app_informaciones` (rep. externo) | React Native + Expo | Portal estudiantil, avisos, carnet digital y enlaces |
-| Panel Admin / Consulta | `servicios_app_back/admin/` | React + Vite | Gestión de servicios, banners, notificaciones y operadores |
-| Backend | `servicios_app_back/backend/` | AdonisJS v6 + TypeScript | API REST central, autenticación, base de datos y envío push |
+### 1.2. Backend Central (AdonisJS v6 + PostgreSQL)
+- **Rol:** Motor de reglas de negocio y servidor de datos (API REST).
+- **Responsabilidades:**
+  - Validar la situación académica y financiera del estudiante cruzando datos transaccionales heredados (inscripciones, pagos de matrícula).
+  - Efectuar el proceso de activación post-AGETIC. Registra el dispositivo y el token de acceso.
+  - Gestionar el consumo del trámite de pago universitario (868) en caso de reposiciones.
+  - Generar e invalidar firmas criptográficas (QRs y códigos).
+  - Ejecutar tareas asíncronas (Cron Jobs) para la desactivación automática de carnets que hayan alcanzado su fecha de expiración (`ExpiracionService`).
 
----
+### 1.3. Panel Administrativo (React + Vite)
+- **Rol:** Centro de monitoreo y control (Kill-switch) para la Dirección de TIC.
+- **Responsabilidades:**
+  - Buscar y visualizar en tiempo real el estado detallado de cualquier estudiante.
+  - **Desactivación Remota (Kill-Switch):** En caso de robo del celular del estudiante, el operador puede inhabilitar remotamente la credencial (borra el device token e invalida accesos).
+  - Publicación y gestión de Banners informativos que la aplicación móvil consume y muestra al estudiante.
+  - Gestión de operadores administrativos del sistema.
 
-## Diagrama de Comunicación
+## 2. Flujo Principal de Activación (App Móvil)
 
-```
-┌──────────────────────┐        HTTPS / REST        ┌──────────────────────┐
-│      App Móvil       │ ─────────────────────────► │                      │
-│  React Native + Expo │ ◄───────────────────────── │  Backend AdonisJS v6 │
-│                      │                             │                      │
-└──────────────────────┘                             │  /api/v1/admin/*     │
-                                                     │  /api/v1/app/*       │
-┌──────────────────────┐        HTTPS / REST         │  /api/v1/consulta/*  │
-│    Panel Admin /     │ ─────────────────────────► │                      │
-│    Consulta          │ ◄───────────────────────── │                      │
-│    React + Vite      │                             └──────────┬───────────┘
-└──────────────────────┘                                        │
-                                                     ┌──────────▼───────────┐
-                                                     │     PostgreSQL        │
-                                                     │  BD miuto_des         │
-                                                     │  (solo lectura:       │
-                                                     │  public.personas)     │
-                                                     │  Tablas de servicios  │
-                                                     │  en public (L/E)      │
-                                                     └──────────────────────┘
-```
+A diferencia de modelos anteriores que requerían a un funcionario escaneando QRs, este sistema es **100% autogestionado**:
 
-Ninguna aplicación cliente accede directamente a la base de datos. Toda operación pasa por el backend.
+1. **Intención:** El estudiante abre la app e inicia el flujo de obtención.
+2. **Requisitos:** El Backend revisa que el estudiante esté inscrito (matricula) y con el pago del arancel de carnet (o exento por ser primerizo).
+3. **Identidad:** La app lanza un navegador WebView apuntando al servicio de **Ciudadanía Digital**.
+4. **Callback y Activación:** Tras validarse en Ciudadanía Digital (usualmente requiere validación 2FA por SMS/WhatsApp por parte de AGETIC), se dispara la ruta `/app/activar`. El backend registra el `device_token` del celular, marca el carnet como `activo` y retorna el Token JWT.
 
----
+## 3. Seguridad de Validación
 
-## Módulos Principales del Sistema
+Para validar un Carnet Digital en comedores, transporte universitario o bibliotecas sin depender de que el controlador tenga conexión a internet rápida:
 
-### 1. Panel de Administración y Servicios (`admin/`)
-*   **Inicio de Sesión**: Autenticación para personal de la DTIC y operadores de facultad (Rol `OPERADOR_NOTIFICACIONES` restringido únicamente al envío de push segmentados).
-*   **Notificaciones Push**: Envío segmentado de comunicados a dispositivos móviles filtrando por perfil (estudiante, docente, egresado, etc.), por facultad específica, o por temas generales (académico, deportivo, alertas).
-*   **Banners**: Creación, activación/desactivación y eliminación de anuncios que aparecen en la cabecera de la app móvil.
-*   **Usuarios / Operadores**: Alta de nuevos operadores vinculando personas reales mediante su C.I. de la base de datos de la UTO.
-*   **Carnets (Beta)**: Activación presencial (voucher) y desactivación del carnet digital.
+1. El estudiante presiona el botón "Validar" en la App.
+2. La app hace una petición rápida para obtener un QR (generado y firmado en el backend en `QrVerificacionService`).
+3. Este QR es validado asincrónicamente mediante criptografía simétrica (HMAC SHA-256) usando el `APP_KEY` del backend por las apps controladoras.
+4. Si el estudiante no tiene datos, se puede generar un código alfanumérico temporal (`CodigoVerificacionService`) válido por 10 minutos para ser introducido manualmente por el conductor o encargado.
 
-### 2. Módulo de Verificación Pública (`/verificar`)
-*   Acceso público directo sin inicio de sesión.
-*   Permite a entes externos o personal de seguridad verificar la autenticidad del carnet digital de un estudiante escaneando su QR o ingresando su código de 5 dígitos temporal (2FA).
+## 4. Despliegue (Docker)
 
-### 3. Backend (`backend/`)
-Expone e implementa los endpoints consumidos por el panel administrativo y la aplicación móvil:
-
-| Controlador / Servicio | Responsabilidad |
-|---|---|
-| `AuthPanelController` | Autenticación del panel administrativo (tokens en `app_tokens`) |
-| `PushNotificationsController` | Gestión de suscripciones de dispositivos (`push_tokens`) y envíos masivos FCM |
-| `BannersController` | Carga de archivos y gestión de anuncios (`banners`) |
-| `AdminUsersController` | Búsqueda de personas por CI y administración de operadores |
-| `AdminCarnetController` | Control de carnets (activar/desactivar) |
-| `ConsultaController` | Verificación pública de validez de carnet |
-| `AuthEstudianteController` | Activación de dispositivo móvil del estudiante |
-
----
-
-## Seguridad
-
-*   **Autenticación Admins/Operadores**: Autenticación basada en tokens utilizando la configuración por defecto de AdonisJS v6 (`scrypt`) mapeada a la tabla `public._usuarios`.
-*   **Autorización por Rol**: Los operadores del tipo `OPERADOR_NOTIFICACIONES` tienen un enrutado estricto en el frontend que los bloquea de ver la sección de usuarios, banners o carnets.
-*   **Notificaciones**: Tokens FCM almacenados de forma segura en `push_tokens` con filtros de segmentación en formato de arreglos PostgreSQL (`text[]`).
-*   **QR de Verificación**: Token HMAC-SHA256 de corta duración (1 hora) con firmas encriptadas que garantizan que el QR no sea una captura de pantalla estática.
-*   **Código de Verificación**: Algoritmo de generación de 5 dígitos alfanuméricos de un solo uso con expiración de 10 minutos para validación presencial de carnet.
-
----
-
-## Identidad Institucional y Configuración
-
-| Elemento | Valor |
-|---|---|
-| Institución | Universidad Técnica de Oruro (UTO) |
-| Dirección encargada | DTIC — Dirección de Tecnologías de Información y Comunicación |
-| Color primario | Azul `#003087` |
-| Color secundario | Dorado `#FFD700` |
-| Application ID / Bundle ID | `bo.edu.uto.informaciones` |
-| Cuenta institucional | `@uto.edu.bo` (Google Workspace) |
+Todo el backend y el panel de administración corren orquestados mediante un único `docker-compose.yml`, que define volúmenes para carga de banners, red interna segura, y variables dinámicas de entorno que se inyectan tanto en el frontend como en el backend.

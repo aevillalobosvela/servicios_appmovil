@@ -1,225 +1,41 @@
-# Base de Datos — Servicios Digitales UTO
+# Base de Datos y Modelado de Datos
 
-Documentación del esquema de base de datos de los servicios móviles. Las únicas tablas creadas o modificadas por este sistema son aquellas del esquema `public` detalladas a continuación. El resto de las tablas académicas y de cobros ya existen de forma nativa en la base de datos de producción de la universidad.
+El backend se conecta a una base de datos PostgreSQL institucional unificada (ej. `miuto_des`). El diseño de la solución debe respetar una filosofía estricta: **no modificar ni alterar la estructura de las tablas institucionales críticas (solo lectura).**
 
-Los grupos de tablas son:
-1. **Tablas propias del sistema (Esquema `public`)** — tablas de control de acceso, banners, tokens y notificaciones (`app_registro`, `app_tokens`, `push_tokens`, `banners` y la integración con `_usuarios`).
-2. **Tablas externas preexistentes (solo lectura)** — `public.personas`, `matricula.pagos` (y tablas auxiliares `carreras`, `gestiones`), `public.deudores` y `public.deudores_responsables`.
-3. **Tabla externa de registro (lectura/escritura)** — `public.emisiones_certificacion` (donde se queman los cobros arancelarios utilizados).
+## 1. Esquema de Solo Lectura (Consultas Cruzadas)
 
----
+Para determinar el estado de un estudiante, el sistema realiza cruces de datos (JOINs y subconsultas) altamente optimizados a través de las siguientes tablas, las cuales no administra:
 
-## Tablas Propias (Esquema `public`)
+- **`public.personas`**: Datos personales básicos (C.I., nombres, fechas de nacimiento, foto digital alojada en el servidor SAGA).
+- **`public.estudiantes`**: Registro académico del estudiante en carreras específicas, contiene su ID académico y el estado del pago por ser estudiante activo.
+- **`public.facultades` y `public.carreras`**: Catálogos.
+- **`matricula.pagos`**: Registros transaccionales anuales del pago del derecho a matrícula del estudiante por gestión.
+- **`tesoro.rcobros` y `tesoro.rtramites`**: Tablas donde se buscan recibos de cobro universitarios. El sistema escanea pagos no utilizados del trámite **868** (reposición de carnet universitario).
+- **`public.deudores` y `public.deudores_responsables`**: Verificación de deudas pendientes en bibliotecas u otros entes que impiden la matriculación limpia.
 
-Las tablas del sistema se crean o integran dentro del esquema `public` estándar para interactuar de forma directa con los sistemas existentes de la universidad.
+## 2. Esquema Mixto (Lectura/Escritura Legada)
 
----
+Existen tablas propias del ecosistema administrativo de la universidad en las que este sistema sí escribe, pero bajo estrictas reglas para coexistir con otras aplicaciones:
 
-### `public._usuarios`
+- **`public._usuarios`**: Tabla de cuentas de usuario. Este backend la utiliza para autenticar a los operadores del Panel Admin. Si no existen, el sistema las crea en base a la persona (usando hashing seguro en la columna nueva `clave2`).
+- **`public.sistemas`**: Catálogo de sistemas. El seeder inscribe automáticamente el sistema actual usando el valor `SYSTEM_ID` de las variables de entorno.
+- **`public._roles`, `public._usr_roles`, `public._usr_facultades`**: Sistema de roles y accesos institucionales clásico, adaptado por nuestro seeder para crear `ADMINISTRADOR_APP` y `OPERADOR_NOTIFICACIONES`.
+- **`public.emisiones_certificacion`**: Tabla crítica donde el backend registra o "quema" un recibo de cobro `868` cuando un estudiante activa su carnet de reposición. Esto evita el doble gasto de un mismo valor.
 
-Usuarios del panel administrativo (administradores de la DTIC y operadores de facultades). Esta es una tabla central preexistente de la UTO integrada en el sistema para la autenticación unificada.
+## 3. Esquema Propio (App Móvil)
 
-```sql
-CREATE TABLE public._usuarios (
-  id_usuario   SERIAL PRIMARY KEY,
-  id_persona   INTEGER      NOT NULL,           -- FK lógica a public.personas.id_persona
-  apodo        VARCHAR(60)  NOT NULL UNIQUE,    -- nombre de usuario (ej: "admin.dtic")
-  clave        VARCHAR(255) NOT NULL,           -- clave legada / MD5
-  clave2       VARCHAR(255) NOT NULL DEFAULT '', -- hash seguro scrypt (AdonisJS v6)
-  recordatorio VARCHAR(255) DEFAULT '',
-  id_estado    BOOLEAN      NOT NULL DEFAULT true
-);
-```
+Estas son las tablas exclusivas del sistema de Carnet Digital, creadas y gestionadas íntegramente por nuestras Migraciones de AdonisJS:
 
-**Notas:**
-- Se utiliza la columna `clave2` para almacenar contraseñas seguras bajo el nuevo backend.
-- La relación polimórfica de tokens de AdonisJS asocia a estos usuarios con sus sesiones activas de administración.
+### `public.app_registro` (La más importante)
+Guarda el estado real de emisión de la credencial del estudiante.
+- Columnas Clave: `id_persona`, `estado` ('activo', 'inactivo', 'expirado'), `device_token` (identificador único del celular autorizado), `activado_en`, `expira_en`.
+- Rendimiento: Cuenta con los índices compuestos concurrentes `idx_app_registro_persona_estado` y `idx_app_registro_id_persona` que permiten listados ultra veloces en el Panel de Administración sin importar el volumen masivo de estudiantes.
 
----
+### `public.app_tokens`
+Tokens JWT opacos generados por AdonisJS para autenticar las peticiones de la App Móvil. Garantizan el cierre de sesión seguro o la invalidación automática en caso de robo.
 
-### `public.app_registro` (antes `carnet_registro`)
+### `public.app_push_tokens`
+Tokens de la API de notificaciones Push de Expo, mapeados por `id_persona`, para poder segmentar avisos institucionales masivos.
 
-Estado del carnet digital de cada persona y del dispositivo móvil vinculado. Los datos académicos se leen de las tablas externas — esta tabla **solo almacena el estado, metadatos de activación y token de dispositivo**.
-
-```sql
-CREATE TABLE public.app_registro (
-  id                        SERIAL PRIMARY KEY,
-  id_persona                INTEGER      NOT NULL,         -- FK lógica a public.personas.id_persona
-  estudiante_id             UUID,                          -- ID público generado al activar (visible en la app)
-  estado                    VARCHAR(20)  NOT NULL DEFAULT 'inactivo',
-  -- valores: 'inactivo' | 'pendiente' | 'activo' | 'expirado'
-  activado_por              INTEGER,                       -- FK física a public._usuarios.id_usuario
-  activado_en               TIMESTAMPTZ,                   -- timestamp de activación
-  expira_en                 TIMESTAMPTZ,                   -- expiración del carnet (3 años) o del QR de activación
-  device_token              TEXT,                          -- Token de dispositivo móvil vinculado
-  id_carrera                INTEGER,                       -- ID de la carrera del carnet (nullable)
-  id_estudiante_academico   INTEGER,                       -- Código académico de estudiante (nullable)
-  codigo_verificacion       VARCHAR(10),                   -- Código de verificación de 5 dígitos (2FA manual, nullable)
-  codigo_expira_en          TIMESTAMPTZ,                   -- Expiración del código temporal (5 min)
-  updated_at                TIMESTAMPTZ  NOT NULL DEFAULT now(),
-  CONSTRAINT uq_persona_carrera UNIQUE (id_persona, id_carrera)
-);
-
--- Índices de Rendimiento
-CREATE INDEX idx_app_registro_estudiante_id ON public.app_registro (estudiante_id);
-```
-
-**Estados y transiciones (Carnet):**
-- `inactivo`: Sin pago verificado o nunca activado.
-- `pendiente`: QR de activación generado (30 min vigencia), esperando escaneo.
-- `activo`: Carnet operativo en el dispositivo móvil.
-- `expirado`: Límite de 3 años transcurrido desde la activación.
-
----
-
-### `public.app_tokens` (antes `carnet_tokens` / `access_tokens`)
-
-Almacenamiento de tokens de acceso (OAT) unificado de AdonisJS para gestionar las sesiones de administradores y operadores de forma segura.
-
-```sql
-CREATE TABLE public.app_tokens (
-  id            SERIAL PRIMARY KEY,
-  tokenable_id  INTEGER NOT NULL,              -- ID de usuario (public._usuarios.id_usuario)
-  type          VARCHAR(80) NOT NULL,          -- tipo de token ('opaque')
-  name          VARCHAR(255) NULL,             -- nombre descriptivo del dispositivo
-  hash          VARCHAR(255) NOT NULL,         -- hash del token
-  abilities     TEXT NOT NULL,                 -- scopes (normalmente '["*"]')
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  last_used_at  TIMESTAMPTZ NULL,
-  expires_at    TIMESTAMPTZ NULL
-);
-```
-
----
-
-### `public.push_tokens`
-
-Tokens de dispositivos registrados para el envío de notificaciones push a través de Firebase Cloud Messaging (FCM).
-
-```sql
-CREATE TABLE public.push_tokens (
-  id            SERIAL PRIMARY KEY,
-  app_id        VARCHAR(50) NOT NULL,          -- identificador de la aplicación móvil (ej: 'bo.edu.uto.informaciones')
-  token         VARCHAR(255) NOT NULL UNIQUE,  -- token FCM generado por el dispositivo
-  perfil        VARCHAR(50) NOT NULL DEFAULT 'todos',
-  user_ci       VARCHAR(20) NULL,              -- CI del usuario asociado (opcional)
-  device_os     VARCHAR(20) NULL,              -- sistema operativo ('android' | 'ios')
-  activo        BOOLEAN NOT NULL DEFAULT true, -- interruptor general de notificaciones
-  roles         TEXT[] NOT NULL DEFAULT '{todos}', -- roles a los que pertenece ('estudiante', 'docente', etc.)
-  temas         TEXT[] NOT NULL DEFAULT '{}',  -- temas suscritos ('academico', 'deportivo', 'facultad_X', etc.)
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_push_tokens_app_id ON public.push_tokens (app_id);
-CREATE INDEX idx_push_tokens_perfil ON public.push_tokens (perfil);
-```
-
----
-
-### `public.banners`
-
-Imágenes de anuncios y comunicados activos que se renderizan dinámicamente en la cabecera/inicio de la aplicación móvil.
-
-```sql
-CREATE TABLE public.banners (
-  id                  SERIAL PRIMARY KEY,
-  titulo              VARCHAR(150) NULL,
-  imagen_path         VARCHAR(255) NOT NULL,         -- nombre del archivo físico en el servidor
-  enlace_redireccion  VARCHAR(255) NULL,             -- enlace web externo de redirección
-  activo              BOOLEAN NOT NULL DEFAULT true, -- determina si está visible
-  created_at          TIMESTAMPTZ NOT NULL,
-  updated_at          TIMESTAMPTZ NULL
-);
-```
-
----
-
-## Tablas externas (solo lectura)
-
-### `public.personas`
-Tabla principal de personas de la universidad. Contiene los datos civiles de estudiantes, docentes y administrativos.
-
-| Columna | Tipo | Descripción |
-|---|---|---|
-| `id_persona` | `INTEGER` PK | Clave primaria |
-| `dip` | `TEXT` | C.I. (DIP) del usuario |
-| `nombre_completo` | `TEXT` | Nombre completo en mayúsculas |
-| `codigo` | `INTEGER` | Código numérico institucional |
-| `digital` | `VARCHAR` | Contiene `"foto"` si el usuario tiene fotografía registrada |
-| `id_estado` | `BOOLEAN` | Habilitación de la persona |
-
----
-
-### `matricula.pagos`
-Registro centralizado de matrículas de estudiantes activos.
-
-| Columna | Tipo | Descripción |
-|---|---|---|
-| `id_pago` | `INTEGER` PK | Clave primaria |
-| `id_persona` | `INTEGER` | Relación con `public.personas` |
-| `id_carrera` | `INTEGER` | Carrera en la que se matriculó |
-| `id_facultad` | `VARCHAR` | Letra identificadora de la facultad (ej: `'G'`) |
-| `estado_pago` | `BOOLEAN` | `true` = Pago completado / Habilitado |
-| `id_estado` | `BOOLEAN` | `true` = Estudiante regular |
-
----
-
-## Diagrama de relaciones
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        ESQUEMA public (Tablas Activas)                 │
-│                                                                        │
-│  ┌──────────────────────┐        ┌──────────────────────────────────┐  │
-│  │  public._usuarios     │        │  public.app_registro             │  │
-│  ├──────────────────────┤        ├──────────────────────────────────┤  │
-│  │ id_usuario SERIAL PK ◄┼┐      │ id SERIAL PK                     │  │
-│  │ apodo VARCHAR UNIQUE │ │      │ id_persona INTEGER               ├──┐│
-│  │ clave VARCHAR        │ └──────│ activado_por INTEGER             │  ││
-│  │ clave2 VARCHAR       │        │ estudiante_id UUID               │  ││
-│  │ id_estado BOOLEAN    │        │ estado VARCHAR                   │  ││
-│  └──────────────────────┘        │ activado_en TIMESTAMPTZ          │  ││
-│                                  │ device_token TEXT                │  ││
-│  ┌──────────────────────┐        │ id_carrera INTEGER               │  ││
-│  │  public.app_tokens   │        └──────────────────────────────────┘  ││
-│  ├──────────────────────┤                                              ││
-│  │ id SERIAL PK         │        ┌──────────────────────────────────┐  ││
-│  │ tokenable_id INT     │        │  public.push_tokens              │  ││
-│  │ hash VARCHAR         │        ├──────────────────────────────────┤  ││
-│  │ expires_at TIMESTAMPTZ│       │ id SERIAL PK                     │  ││
-│  └──────────────────────┘        │ token VARCHAR UNIQUE             │  ││
-│                                  │ roles TEXT[]                     │  ││
-│  ┌──────────────────────┐        │ temas TEXT[]                     │  ││
-│  │  public.banners      │        └──────────────────────────────────┘  ││
-│  ├──────────────────────┤                                              ││
-│  │ id SERIAL PK         │                                              ││
-│  │ imagen_path VARCHAR  │                                              ││
-│  │ activo BOOLEAN       │                                              ││
-│  └──────────────────────┘                                              ││
-└────────────────────────────────────────────────────────────────────────┼┘
-                                                                         │
-                                                                         ▼ id_persona
-┌────────────────────────────────────────────────────────────────────────┐
-│                      ESQUEMA public / matricula (Solo Lectura)         │
-│                                                                        │
-│  ┌──────────────────────────────────────────────────────────────────┐  │
-│  │  public.personas                                                 │  │
-│  ├──────────────────────────────────────────────────────────────────┤  │
-│  │ id_persona INTEGER PK ◄──────────────────────────────────────────┘  │
-│  │ dip TEXT (C.I.)                                                     │
-│  │ nombre_completo TEXT                                                │
-│  └──────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Historial de Migraciones del Backend
-
-Las migraciones se ejecutan en el siguiente orden secuencial para garantizar la integridad referencial:
-
-1. `1787400000000_create_app_tokens_table.ts` — Crea la tabla de tokens de sesión unificada `public.app_tokens`.
-2. `1787400000001_create_app_registro_table.ts` — Crea la tabla `public.app_registro` de estados de carnet.
-3. `1787400000002_create_app_push_tokens_table.ts` — Crea la tabla de tokens de notificaciones `public.app_push_tokens`.
-4. `1787400000003_create_app_banners_table.ts` — Crea la tabla de banners publicitarios `public.app_banners`.
+### `public.app_banners`
+Contenido publicitario o informativo emitido por DTIC que se visualiza en la App, con control de fechas y activación (switch On/Off).

@@ -4,7 +4,7 @@
 
 El sistema de Servicios Digitales UTO es una plataforma integral que busca facilitar diversos trámites y servicios a los estudiantes de la Universidad Técnica de Oruro (UTO). El sistema se compone de dos aplicaciones principales:
 
-1. **Panel Admin:** Una interfaz administrativa web desarrollada con React y Vite, destinada a la gestión de usuarios, banners, y otros parámetros del sistema.
+1. **Panel Admin:** Una interfaz administrativa web desarrollada con React y Vite, destinada a la gestión de operadores, publicación de banners informativos y, principalmente, como gestor centralizado para consultar y desactivar remotamente los carnets digitales emitidos.
 2. **Backend:** Un servidor API REST desarrollado con AdonisJS y PostgreSQL, que sirve como núcleo lógico del sistema, manejando la lógica de negocio y la persistencia de datos.
 
 El sistema completo se ejecuta dentro de contenedores Docker, orquestados mediante un archivo `docker-compose.yml` en la raíz del proyecto. Esta orquestación se encarga de:
@@ -62,6 +62,7 @@ Las migraciones a ejecutar (en orden) son:
 - `1787400000001_create_app_registro_table.ts` — crea `public.app_registro`
 - `1787400000002_create_app_push_tokens_table.ts` — crea `public.app_push_tokens`
 - `1787400000003_create_app_banners_table.ts` — crea `public.app_banners`
+- `1787400000005_add_performance_indexes_app_registro.ts` — crea índices concurrentes (`idx_app_registro_persona_estado`, `idx_app_registro_id_persona`) optimizando radicalmente el tiempo de respuesta.
 
 El seeder único (`database/seeders/usuario_seeder.ts`) es **idempotente** (puede ejecutarse múltiples veces sin duplicar datos) y se encarga de:
 
@@ -136,7 +137,7 @@ Esto compila el backend (AdonisJS → `build/`) y el frontend (React → bundle 
 ```bash
 docker compose exec backend node ace migration:run --force
 ```
-Crea las 4 tablas del sistema: `app_tokens`, `app_registro`, `app_push_tokens`, `app_banners`. El flag `--force` es requerido por AdonisJS en modo producción.
+Crea las 4 tablas del sistema (`app_tokens`, `app_registro`, `app_push_tokens`, `app_banners`) e inyecta los **índices de rendimiento** para búsquedas rápidas. El flag `--force` es requerido por AdonisJS en modo producción.
 
 **Paso 4 — Ejecutar el seeder inicial**
 ```bash
