@@ -52,7 +52,6 @@ router
     router
       .group(() => {
         router.post('app/logout', [AuthEstudianteController, 'logout'])
-        router.post('app/activar-paralela', [AuthEstudianteController, 'activarParalela'])
         router.get('app/carnet', [CarnetController, 'show'])
         router.get('app/carnet/qr', [CarnetController, 'generarQr'])
         router.get('app/carnet/codigo', [CarnetController, 'generarCodigo'])

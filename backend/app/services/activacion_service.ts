@@ -1,5 +1,5 @@
 import crypto from 'node:crypto'
-import QRCode from 'qrcode'
+
 import db from '@adonisjs/lucid/services/db'
 import env from '#start/env'
 
@@ -23,54 +23,6 @@ export default class ActivacionService {
       .first()
 
     return !!pagoEstudiante
-  }
-
-  /**
-   * Genera el token y el código QR en base64 para un timestamp dado, sin interactuar con la base de datos
-   */
-  async obtenerQrBase64(idPersona: number, expiresAt: number): Promise<string> {
-    const dataToSign = `${idPersona}:${expiresAt}`
-    const signature = crypto
-      .createHmac('sha256', env.get('APP_KEY').release())
-      .update(dataToSign)
-      .digest('hex')
-
-    const token = `${dataToSign}:${signature}`
-    return QRCode.toDataURL(token)
-  }
-
-  /**
-   * Genera un QR con token firmado por 30 minutos sin modificar la base de datos
-   */
-  async generarQrActivacion(idPersona: number): Promise<string> {
-    const expiresAt = Date.now() + 30 * 60 * 1000 // 30 minutos
-    return this.obtenerQrBase64(idPersona, expiresAt)
-  }
-
-  /**
-   * Valida criptográficamente el token del QR de activación
-   */
-  validarQrActivacion(token: string): number | null {
-    try {
-      const parts = token.split(':')
-      if (parts.length !== 3) return null
-
-      const [idPersonaStr, expiresAtStr, signature] = parts
-      const expiresAt = parseInt(expiresAtStr, 10)
-      if (isNaN(expiresAt) || Date.now() > expiresAt) return null
-
-      const dataToSign = `${idPersonaStr}:${expiresAtStr}`
-      const expectedSignature = crypto
-        .createHmac('sha256', env.get('APP_KEY').release())
-        .update(dataToSign)
-        .digest('hex')
-
-      if (signature !== expectedSignature) return null
-
-      return parseInt(idPersonaStr, 10)
-    } catch {
-      return null
-    }
   }
 
   /**
