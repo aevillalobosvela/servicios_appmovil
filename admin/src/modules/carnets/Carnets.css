@@ -217,3 +217,11 @@
   font-size: var(--tamanio-sm);
   color: var(--color-gris-secundario);
 }
+
+.tabla-fila--activo {
+  background-color: var(--color-exito-bg) !important;
+}
+
+.tabla-fila--activo:hover {
+  background-color: #dcfce7 !important;
+}

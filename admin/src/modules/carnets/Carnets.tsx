@@ -62,7 +62,6 @@ export function Carnets() {
   const navigate = useNavigate();
   const [busquedaInput, setBusquedaInput] = useState(() => sessionStorage.getItem('carnets_busquedaInput') || '');
   const [busquedaDebounced, setBusquedaDebounced] = useState(() => sessionStorage.getItem('carnets_busquedaInput') || '');
-  const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>(() => (sessionStorage.getItem('carnets_filtroEstado') as FiltroEstado) || 'todos');
   const [personas, setPersonas] = useState<Persona[]>([]);
   const [cargando, setCargando] = useState(true);
 
@@ -71,46 +70,17 @@ export function Carnets() {
   const [lastPage, setLastPage] = useState(1);
   const [total, setTotal] = useState(0);
 
-  // Estadísticas globales
-  const [totalRegistrados, setTotalRegistrados] = useState(0);
-  const [totalActivos, setTotalActivos] = useState(0);
-  const [totalPendientes, setTotalPendientes] = useState(0);
-  const [totalInactivos, setTotalInactivos] = useState(0);
-
-  // Obtener resúmenes estadísticos generales (ejecutado al montar)
-  const fetchCounts = async () => {
-    try {
-      const [allRes, activosRes, pendientesRes, inactivosRes] = await Promise.all([
-        api.get('admin/carnets?limit=1'),
-        api.get('admin/carnets?estado=activo&limit=1'),
-        api.get('admin/carnets?estado=pendiente&limit=1'),
-        api.get('admin/carnets?estado=inactivo&limit=1'),
-      ]);
-      setTotalRegistrados(allRes.meta.total);
-      setTotalActivos(activosRes.meta.total);
-      setTotalPendientes(pendientesRes.meta.total);
-      setTotalInactivos(inactivosRes.meta.total);
-    } catch (e) {
-      console.error('Error al obtener resúmenes estadísticos:', e);
-    }
-  };
-
-  // Obtener lista paginada y filtrada (solo si hay un criterio de búsqueda activo)
+  // Obtener lista paginada y filtrada
   const fetchPersonas = async () => {
-    if (!busquedaDebounced.trim()) {
-      setPersonas([]);
-      setTotal(0);
-      setLastPage(1);
-      setCargando(false);
-      return;
-    }
     setCargando(true);
     try {
       const params = new URLSearchParams();
-      if (filtroEstado !== 'todos') {
-        params.append('estado', filtroEstado);
+      if (busquedaDebounced.trim()) {
+        params.append('search', busquedaDebounced.trim());
+      } else {
+        // Por defecto, al no haber búsqueda, solo mostramos los activos
+        params.append('estado', 'activo');
       }
-      params.append('search', busquedaDebounced.trim());
       params.append('page', String(page));
       params.append('limit', '10');
 
@@ -126,11 +96,11 @@ export function Carnets() {
   };
 
   const handleRefresh = async () => {
-    await Promise.all([fetchCounts(), fetchPersonas()]);
+    await fetchPersonas();
   };
 
   useEffect(() => {
-    fetchCounts();
+    fetchPersonas();
   }, []);
 
   // Resetear la búsqueda si el input se limpia por completo, de lo contrario solo buscar al presionar Enter
@@ -158,10 +128,6 @@ export function Carnets() {
   }, [busquedaInput]);
 
   useEffect(() => {
-    sessionStorage.setItem('carnets_filtroEstado', filtroEstado);
-  }, [filtroEstado]);
-
-  useEffect(() => {
     sessionStorage.setItem('carnets_page', String(page));
   }, [page]);
 
@@ -172,19 +138,11 @@ export function Carnets() {
       return;
     }
     setPage(1);
-  }, [busquedaDebounced, filtroEstado]);
+  }, [busquedaDebounced]);
 
   useEffect(() => {
     fetchPersonas();
-  }, [busquedaDebounced, filtroEstado, page]);
-
-  const filtros: { valor: FiltroEstado; etiqueta: string }[] = [
-    { valor: 'todos',      etiqueta: 'Todos' },
-    { valor: 'activo',     etiqueta: 'Activos' },
-    { valor: 'pendiente',  etiqueta: 'Habilitados' },
-    { valor: 'inactivo',   etiqueta: 'Inactivos' },
-    { valor: 'expirado',   etiqueta: 'Expirados' },
-  ];
+  }, [busquedaDebounced, page]);
 
   return (
     <div className="pagina">
@@ -209,27 +167,20 @@ export function Carnets() {
         </button>
       </div>
 
-      {/* ── Tarjetas de resumen ── */}
-      <div className="resumen-grid">
-        <div className="resumen-tarjeta">
-          <span className="resumen-numero">{totalRegistrados}</span>
-          <span className="resumen-etiqueta">Total personas</span>
-        </div>
-        <div className="resumen-tarjeta resumen-tarjeta--activo">
-          <span className="resumen-numero">{totalActivos}</span>
-          <span className="resumen-etiqueta">Con carnet activo</span>
-        </div>
-        <div className="resumen-tarjeta resumen-tarjeta--habilitado">
-          <span className="resumen-numero">{totalPendientes}</span>
-          <span className="resumen-etiqueta">Habilitados (pago verificado)</span>
-        </div>
-        <div className="resumen-tarjeta resumen-tarjeta--inactivo">
-          <span className="resumen-numero">{totalInactivos}</span>
-          <span className="resumen-etiqueta">Sin carnet activo</span>
-        </div>
-      </div>
-
       {/* ── Filtros ── */}
+      <div style={{ marginTop: '20px', marginBottom: '10px', fontSize: '13px', color: 'var(--color-gris-secundario)', display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>Por defecto se muestran <strong>únicamente los carnets activos</strong>. Usa el buscador para encontrar a cualquier estudiante por nombre o C.I.</span>
+        {busquedaDebounced && (
+          <button 
+            type="button" 
+            className="btn btn--primario" 
+            style={{ padding: '6px 12px', fontSize: '12px', whiteSpace: 'nowrap', borderRadius: 'var(--radio-md)' }}
+            onClick={() => { setBusquedaInput(''); setBusquedaDebounced(''); }}
+          >
+            Mostrar solo activos
+          </button>
+        )}
+      </div>
       <div className="filtros">
         <input
           type="text"
@@ -241,17 +192,6 @@ export function Carnets() {
           onFocus={e => e.target.select()}
           style={{ textTransform: 'uppercase' }}
         />
-        <div className="filtros-estado">
-          {filtros.map(({ valor, etiqueta }) => (
-            <button
-              key={valor}
-              className={`filtros-btn${filtroEstado === valor ? ' filtros-btn--activo' : ''}`}
-              onClick={() => setFiltroEstado(valor)}
-            >
-              {etiqueta}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* ── Tabla ── */}
@@ -274,12 +214,6 @@ export function Carnets() {
                   Cargando personas...
                 </td>
               </tr>
-            ) : !busquedaDebounced.trim() ? (
-              <tr>
-                <td colSpan={6} className="tabla-vacia">
-                  Por favor, ingrese un nombre o C.I. y presione Enter para realizar una búsqueda.
-                </td>
-              </tr>
             ) : personas.length === 0 ? (
               <tr>
                 <td colSpan={6} className="tabla-vacia">
@@ -288,7 +222,7 @@ export function Carnets() {
               </tr>
             ) : (
               personas.map(persona => (
-                <tr key={persona.idPersona} className="tabla-fila">
+                <tr key={persona.idPersona} className={`tabla-fila ${persona.estado === 'activo' ? 'tabla-fila--activo' : ''}`}>
                   <td>
                     <div className="tabla-estudiante">
                       <div className="tabla-avatar">

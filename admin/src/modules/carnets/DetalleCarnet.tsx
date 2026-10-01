@@ -6,8 +6,6 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
-  Lock,
-  QrCode,
   Mail,
   Phone,
   Calendar,
@@ -90,11 +88,10 @@ export function DetalleCarnet() {
 
   // Estados de activación
   const [carreraSeleccionada, setCarreraSeleccionada] = useState<CarreraAcademica | null>(null);
-  const [qrBase64, setQrBase64] = useState<string | null>(null);
   const [confirmando, setConfirmando] = useState(false);
   const [procesandoAccion, setProcesandoAccion] = useState(false);
   const [errorAccion, setErrorAccion] = useState('');
-  const [accionPendiente, setAccionPendiente] = useState<'activar' | 'desactivar' | null>(null);
+  const [accionPendiente, setAccionPendiente] = useState<'desactivar' | null>(null);
 
   const fetchEstudiante = async () => {
     setCargando(true);
@@ -111,19 +108,12 @@ export function DetalleCarnet() {
 
           const selection = updated
             || data.carreras.find((c: CarreraAcademica) => c.estado === 'activo')
-            || data.carreras.find((c: CarreraAcademica) => c.estado === 'pendiente')
             || data.carreras[0];
 
-          if (selection && selection.estado === 'pendiente' && selection.qr) {
-            setQrBase64(selection.qr);
-          } else {
-            setQrBase64(null);
-          }
           return selection;
         });
       } else {
         setCarreraSeleccionada(null);
-        setQrBase64(null);
       }
     } catch (err) {
       console.error(err);
@@ -164,7 +154,7 @@ export function DetalleCarnet() {
     );
   }
 
-  const handleCambiarEstado = (accion: 'activar' | 'desactivar') => {
+  const handleCambiarEstado = (accion: 'desactivar') => {
     setAccionPendiente(accion);
     setConfirmando(true);
     setErrorAccion('');
@@ -176,26 +166,13 @@ export function DetalleCarnet() {
     setProcesandoAccion(true);
     setErrorAccion('');
     try {
-      if (accionPendiente === 'activar') {
-        if (!carreraSeleccionada) {
-          throw new Error('Debe seleccionar una carrera para la activación.');
-        }
-        const response = await api.post('admin/carnets/activar', {
-          idPersona: estudiante.idPersona,
-          idCarrera: carreraSeleccionada.idCarrera,
-          idEstudiante: carreraSeleccionada.idEstudiante
-        });
-
-        await fetchEstudiante();
-        setQrBase64(response.qr);
-      } else if (accionPendiente === 'desactivar') {
+      if (accionPendiente === 'desactivar') {
         if (!carreraSeleccionada || !carreraSeleccionada.carnetId) {
           throw new Error('Debe seleccionar un carnet válido para desactivar.');
         }
         await api.post(`admin/carnets/${carreraSeleccionada.carnetId}/desactivar`);
 
         await fetchEstudiante();
-        setQrBase64(null);
       }
     } catch (err) {
       console.error(err);
@@ -325,11 +302,6 @@ export function DetalleCarnet() {
                           className={`tabla-fila ${esSeleccionada ? 'fila-seleccionada' : ''}`}
                           onClick={() => {
                             setCarreraSeleccionada(c);
-                            if (c.estado === 'pendiente' && c.qr) {
-                              setQrBase64(c.qr);
-                            } else {
-                              setQrBase64(null);
-                            }
                             setErrorAccion('');
                           }}
                           style={{ cursor: 'pointer' }}
@@ -388,25 +360,9 @@ export function DetalleCarnet() {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center' }}>
                               <BadgeEstado estado={c.estado as any || 'inactivo'} />
 
-                              {(c.estado === 'inactivo' || c.estado === 'expirado' || !c.estado) && (
-                                <button
-                                  className="btn btn--primario"
-                                  style={{ padding: '4px 10px', fontSize: '11px', whiteSpace: 'nowrap', marginTop: '4px' }}
-                                  disabled={
-                                    !c.habilitada ||
-                                    !estudiante.tienePagoValor ||
-                                    procesandoAccion
-                                  }
-                                  onClick={() => {
-                                    setCarreraSeleccionada(c);
-                                    handleCambiarEstado('activar');
-                                  }}
-                                >
-                                  Activar
-                                </button>
-                              )}
 
-                              {(c.estado === 'activo' || c.estado === 'pendiente') && (
+
+                              {(c.estado === 'activo') && (
                                 <button
                                   className="btn btn--peligro"
                                   style={{ padding: '4px 10px', fontSize: '11px', whiteSpace: 'nowrap', marginTop: '4px' }}
@@ -435,7 +391,7 @@ export function DetalleCarnet() {
                 </table>
               </div>
             </div>
-            {carreraSeleccionada && (carreraSeleccionada.estado === 'activo' || carreraSeleccionada.estado === 'pendiente') && (
+            {carreraSeleccionada && (carreraSeleccionada.estado === 'activo') && (
               <div style={{ padding: '12px 15px', borderTop: '1px solid var(--color-gris-medio)', fontSize: '12px', color: 'var(--color-gris-secundario)', display: 'flex', flexWrap: 'wrap', gap: '15px', justifyContent: 'space-between' }}>
                 <span><strong>Activado en:</strong> {formatFecha(carreraSeleccionada.activadoEn || null)}</span>
                 <span><strong>Expira el:</strong> {formatFecha(carreraSeleccionada.expiraEn || null)}</span>
@@ -445,52 +401,6 @@ export function DetalleCarnet() {
 
           {/* Sub-grid inferior: QR y Deudas permanentes lado a lado */}
           <div className="sub-grid-acciones">
-
-            {/* Tarjeta de Código QR de Activación */}
-            <section className="seccion">
-              <h2 className="seccion-titulo" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <QrCode size={16} /> Código QR de Activación
-              </h2>
-              <div className="seccion-cuerpo">
-                <div style={{ display: 'flex', alignItems: 'start', gap: '8px', marginBottom: '12px' }}>
-                  <QrCode size={16} style={{ marginTop: '2px', flexShrink: 0, color: 'var(--color-gris-secundario)' }} />
-                  <p className="seccion-descripcion" style={{ margin: 0, fontSize: '12px' }}>
-                    Código de un solo uso. Escanear desde la app móvil para activar el dispositivo.
-                  </p>
-                </div>
-
-                {(!carreraSeleccionada || carreraSeleccionada.estado !== 'pendiente') && (
-                  <div className="estado-info estado-info--inactivo" style={{ display: 'flex', alignItems: 'start', gap: '8px', fontSize: '12px' }}>
-                     <Lock size={16} style={{ marginTop: '2px', flexShrink: 0 }} />
-                    <div>
-                      El código QR se generará automáticamente tras hacer clic en "Activar" en la carrera correspondiente.
-                    </div>
-                  </div>
-                )}
-
-                {carreraSeleccionada && carreraSeleccionada.estado === 'pendiente' && qrBase64 && (
-                  <div className="qr-contenedor" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '15px', padding: '15px' }}>
-                    <img
-                      src={qrBase64}
-                      alt="QR de activación"
-                      style={{
-                        width: '180px',
-                        height: '180px',
-                        border: '4px solid var(--color-primario)',
-                        borderRadius: 'var(--radio-md)',
-                        boxShadow: 'var(--sombra-md)'
-                      }}
-                    />
-                    <div style={{ textAlign: 'center' }}>
-                      <p style={{ color: 'var(--color-exito)', fontWeight: '600', fontSize: '13px', margin: '0' }}>✓ QR de Activación Listo</p>
-                      <p style={{ color: 'var(--color-gris-deshabilitado)', fontSize: '11px', margin: '4px 0 0 0' }}>
-                        Vence en 30 minutos o al primer uso
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
 
             {/* Tarjeta de Historial de Deudas (Siempre visible) */}
             <section className="seccion">
@@ -556,7 +466,7 @@ export function DetalleCarnet() {
           <div className="modal-contenedor" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h3 className="modal-titulo">
-                {accionPendiente === 'desactivar' ? 'Confirmar Desactivación de Carnet' : 'Confirmar Activación de Carnet'}
+                Confirmar Desactivación de Carnet
               </h3>
               <button
                 onClick={handleCancelar}
@@ -567,9 +477,7 @@ export function DetalleCarnet() {
             </div>
             <div className="modal-cuerpo">
               <p style={{ fontSize: '14px', color: 'var(--color-gris-texto)', lineHeight: 1.5, margin: 0 }}>
-                {accionPendiente === 'desactivar'
-                  ? `¿Confirmas que deseas desactivar la credencial de la carrera "${carreraSeleccionada.carrera}"? El estudiante perderá el acceso a su carnet digital en su dispositivo móvil de forma inmediata.`
-                  : `¿Confirmas que deseas iniciar el flujo de activación para la carrera "${carreraSeleccionada.carrera}"? Se consumirá un pago de reposición de carnet universitario disponible.`}
+                ¿Confirmas que deseas desactivar la credencial de la carrera "{carreraSeleccionada.carrera}"? El estudiante perderá el acceso a su carnet digital en su dispositivo móvil de forma inmediata.
               </p>
 
               {/* Indicadores en texto plano sin sobrecargar */}
@@ -617,11 +525,11 @@ export function DetalleCarnet() {
                 Cancelar
               </button>
               <button
-                className={`btn ${accionPendiente === 'desactivar' ? 'btn--peligro' : 'btn--primario'}`}
+                className="btn btn--peligro"
                 onClick={handleConfirmar}
                 disabled={procesandoAccion}
               >
-                {procesandoAccion ? 'Procesando...' : (accionPendiente === 'desactivar' ? 'Sí, desactivar' : 'Sí, activar')}
+                {procesandoAccion ? 'Procesando...' : 'Sí, desactivar'}
               </button>
             </div>
           </div>
