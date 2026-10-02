@@ -146,3 +146,51 @@ docker compose exec backend node ace db:seed
 Registra el sistema, crea los roles y el usuario administrador inicial. Credenciales por defecto (si no se configuran `INITIAL_ADMIN_USER`/`INITIAL_ADMIN_PASSWORD` en el `.env`):
 - **Usuario:** `admin.dtic`
 - **Contraseña:** `admin123`
+
+### 8. Verificación Post-Despliegue
+
+Una vez completados los 4 pasos anteriores, ejecutar estas comprobaciones para confirmar que todo está operativo antes de entregar el sistema.
+
+**Verificar que los contenedores están corriendo y saludables:**
+```bash
+docker compose ps
+```
+El estado de ambos servicios (`uto-backend` y `uto-admin`) debe ser `running (healthy)`.
+
+**Verificar que el backend responde:**
+```bash
+curl -s http://localhost:3333/api/v1 | head -c 100
+# Respuesta esperada: {"hello":"world"}
+```
+
+**Verificar que el panel admin carga:**
+```bash
+curl -s -o /dev/null -w "%{http_code}" http://localhost:80
+# Respuesta esperada: 200
+```
+
+**Verificar la conexión a la base de datos (desde dentro del contenedor):**
+```bash
+docker compose exec backend node ace migration:status
+```
+Todas las migraciones deben aparecer con estado `completed`. Si alguna aparece como `pending`, ejecutar el Paso 3 nuevamente.
+
+**Verificar el login del administrador inicial:**
+```bash
+curl -s -X POST http://localhost:3333/api/v1/admin/auth \
+  -H "Content-Type: application/json" \
+  -d '{"usuario":"admin.dtic","password":"admin123"}'
+```
+La respuesta debe incluir un campo `token`. Si devuelve `403`, revisar que el seeder del Paso 4 se ejecutó correctamente.
+
+**Verificar los logs en caso de error:**
+```bash
+# Logs del backend en tiempo real
+docker compose logs -f backend
+
+# Últimas 50 líneas del backend
+docker compose logs --tail=50 backend
+
+# Logs del panel admin (Nginx)
+docker compose logs --tail=20 admin
+```

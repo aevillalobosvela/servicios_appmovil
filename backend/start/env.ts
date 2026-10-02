@@ -38,4 +38,9 @@ export default await Env.create(new URL('../', import.meta.url), {
 
   // System ID
   SYSTEM_ID: Env.schema.number.optional(),
+
+  // Ciudadanía Digital (AGETIC) — requeridas para el flujo OAuth2 de activación
+  // Si no se definen, el backend arranca pero la activación de carnets falla.
+  AGETIC_CLIENT_ID: Env.schema.string.optional(),
+  AGETIC_REDIRECT_URI: Env.schema.string.optional(),
 })

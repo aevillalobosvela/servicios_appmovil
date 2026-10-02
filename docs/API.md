@@ -2,69 +2,86 @@
 
 La API REST está escrita en AdonisJS y se expone a través del prefijo global `/api/v1`.
 
-## 1. Endpoints Públicos (Dispositivos validadores y App anónima)
+Todos los endpoints de la App Móvil usan autenticación **Bearer Token** (OAT de 2 años).  
+Todos los endpoints del Panel Admin usan **Bearer Token** (OAT de 8 horas).
 
-- `POST /consulta/verificar`
-  **Descripción:** Endpoint consumido por los lectores de control (ej. Comedor, Transporte). Recibe un Código Alfanumérico o un Token QR, valida su firma o base de datos, y retorna la identidad de la persona si es válido, indicando que tiene el carnet habilitado. Rate-limited.
+---
 
-- `POST /notifications/register-token`
-  **Descripción:** La App Móvil al iniciar inscribe su Token Push (Expo) asociado a la persona (si la sesión está iniciada) o anónimo.
+## 1. Endpoints Públicos (Sin autenticación)
 
-- `GET /banners/active`
-  **Descripción:** Retorna el banner activo de mayor prioridad que no haya expirado para ser visualizado en la pantalla principal de la app.
+Accesibles desde cualquier cliente. Todos pasan por el middleware de rate limiting (30 req/min por IP).
 
-- `POST /app/activar`
-  **Descripción:** Endpoint consumido post-login en Ciudadanía Digital. El frontend móvil envía el JWT de AGETIC, el backend lo valida, y si cumple con requisitos académicos/financieros (o quema un valor), registra el `device_token` del móvil y retorna el Bearer Token propio del sistema.
+### Autenticación del Panel Admin
+- **`POST /admin/auth`**  
+  Login del operador o administrador del panel web. Recibe `{ usuario, password }` y devuelve el Bearer Token de sesión (8 horas) junto a los datos del usuario y su rol (`ADMINISTRADOR_APP` o `OPERADOR_NOTIFICACIONES`).
 
-## 2. Endpoints Privados (App Móvil del Estudiante)
+### App Móvil — Activación
+- **`POST /app/activar`**  
+  Endpoint consumido tras el login en Ciudadanía Digital (AGETIC). Recibe `{ authCode, codeVerifier, deviceToken }`. El backend intercambia el código OAuth2 con AGETIC, obtiene el C.I. del ciudadano, valida su situación académica y financiera, y si todo es correcto activa el carnet registrando el `device_token` del dispositivo. Devuelve el Bearer Token propio del sistema (2 años).
 
-Estos endpoints requieren el header `Authorization: Bearer <Token>` y pasan por el middleware `auth:estudiante`.
+### App Móvil — Registro de token push
+- **`POST /notifications/register-token`**  
+  La app inscribe su token de notificaciones push (Expo) al iniciar, asociado a la persona autenticada o de forma anónima.
 
-- `POST /app/logout`
-  **Descripción:** Destruye el token de sesión en la base de datos y desvincula el dispositivo.
-  
-- `GET /app/carnet`
-  **Descripción:** Retorna todos los datos formales de la persona y de la credencial digital (nombres, foto, C.I., carrera, estado de la credencial, fechas de emisión y caducidad).
+### App Móvil — Banners
+- **`GET /banners/active`**  
+  Retorna el banner activo más reciente para mostrarse en la pantalla principal de la app. Devuelve `null` si no hay ninguno activo.
 
-- `GET /app/carnet/qr`
-  **Descripción:** Retorna un Token QR (formato imagen Base64 y cadena firmada) autogenerado criptográficamente (HMAC-SHA256) válido por 1 hora para control offline en transporte/comedor.
+### Dispositivos validadores — Verificación de carnet
+- **`POST /consulta/verificar`**  
+  Consumido por lectores de control (comedor, transporte). Recibe un token QR o código alfanumérico, valida su firma criptográfica, y retorna la identidad del portador si es válido.
 
-- `GET /app/carnet/codigo`
-  **Descripción:** Retorna un código alfanumérico aleatorio de 5 dígitos (ej. `A7B4K`) válido por 10 minutos para control offline visual/vocal.
+---
 
-## 3. Endpoints Privados (Panel de Administración)
+## 2. Endpoints Privados — App Móvil del Estudiante
 
-Estos endpoints requieren el header `Authorization: Bearer <Token>` emitido a los administradores y pasan por el middleware `auth:admin`. Todas estas llamadas tienen el prefijo `/api/v1/admin/`.
+Requieren `Authorization: Bearer <token_estudiante>`. Pasan por el middleware `student` que verifica que el carnet esté en estado `activo` y no haya expirado.
 
-- `POST /auth/logout`
-  **Descripción:** Cierra la sesión del operador/administrador.
+- **`POST /app/logout`**  
+  Destruye el token de sesión en la BD. El carnet permanece `activo` en la tabla para permitir recuperación de sesión sin costo en el mismo dispositivo.
 
-- `GET /auth/me`
-  **Descripción:** Retorna la información básica del administrador actualmente logueado.
+- **`GET /app/carnet`**  
+  Retorna todos los datos del carnet: nombre completo, C.I., código de estudiante, carrera, facultad, tipo de estudiante, URL de foto, período académico, estado y fechas de vigencia.
+
+- **`GET /app/carnet/qr`**  
+  Genera y retorna un QR dinámico (imagen Base64) firmado con HMAC-SHA256 usando el `APP_KEY`. Válido por aproximadamente 1 hora (ventana horaria). Se regenera automáticamente en la app cada 9 minutos.
+
+- **`GET /app/carnet/codigo`**  
+  Genera y retorna un código alfanumérico de 5 dígitos válido por 10 minutos. Se almacena en `app_registro.codigo_verificacion` con su timestamp de expiración. Útil para validación oral o manual sin necesidad de escanear QR.
+
+---
+
+## 3. Endpoints Privados — Panel de Administración
+
+Requieren `Authorization: Bearer <token_admin>`. Pasan por el middleware `admin` que verifica que la cuenta esté activa. Todas las rutas tienen el prefijo `/api/v1/admin/`.
+
+### Sesión
+- **`POST /auth/logout`** — Cierra la sesión del operador/administrador (destruye el token en BD).
+- **`GET /auth/me`** — Retorna los datos básicos del administrador autenticado (`id`, `usuario`, `nombre`).
 
 ### Módulo de Carnets
-- `GET /carnets`
-  **Descripción:** Listado y buscador general super rápido de personas en el sistema. Filtra por estado (activo, expirado, inactivo) y puede buscar por C.I. o nombres. Paginado.
-- `GET /carnets/:id`
-  **Descripción:** Retorna el detalle académico exhaustivo (carreras paralelas, pagos, etc.) de un estudiante determinado.
-- `POST /carnets/:id/desactivar`
-  **Descripción:** **Kill-Switch**. Invalida remotamente una credencial activa (ej. ante denuncia de robo de celular por parte del estudiante en las oficinas).
+- **`GET /carnets`**  
+  Listado paginado de personas con carnets. Parámetros opcionales: `?estado=activo|expirado|inactivo`, `?search=<nombre o CI>`, `?page=<n>`, `?limit=<n>` (por defecto 10). Por defecto muestra solo carnets activos. Incluye por persona: total de carreras, carreras activas, carreras con matrícula habilitada y disponibilidad de pago de reposición (trámite 868).
+
+- **`GET /carnets/:id`**  
+  Detalle exhaustivo de un estudiante por `id_persona` o C.I. Devuelve datos personales, array de todas sus carreras con estado académico y de carnet, historial de deudas, y flags de `esPrimeraEmision` y `tienePagoValor`.
+
+- **`POST /carnets/:id/desactivar`**  
+  **Kill-Switch.** Invalida remotamente el carnet (`id` = PK de `app_registro`). Limpia `device_token`, `activado_en`, `expira_en` y pone `estado = 'inactivo'`. La próxima llamada autenticada del estudiante recibirá un `403` y la app cerrará la sesión automáticamente.
 
 ### Módulo de Notificaciones Push
-- `GET /notifications/stats`
-  **Descripción:** Estadísticas generales de los tokens Push registrados en el sistema.
-- `POST /notifications/send`
-  **Descripción:** Dispara una notificación Push asíncrona hacia los teléfonos móviles, segmentada opcionalmente por facultad o enviada masivamente a todos.
+- **`GET /notifications/stats`** — Estadísticas de tokens push registrados (total, por OS, por perfil).
+- **`POST /notifications/send`** — Envía notificación push asíncrona. Cuerpo: `{ titulo, cuerpo, idFacultad? }`. Si `idFacultad` es nulo, se envía a todos los dispositivos registrados.
 
 ### Módulo de Banners
-- `GET /banners` (Listar todos, inactivos y activos).
-- `POST /banners` (Cargar un nuevo banner con imagen multipart/form-data).
-- `PUT /banners/:id/toggle` (Encender/Apagar un banner).
-- `DELETE /banners/:id` (Eliminar lógicamente un banner).
+- **`GET /banners`** — Lista todos los banners (activos e inactivos) ordenados del más reciente al más antiguo.
+- **`POST /banners`** — Sube un nuevo banner (`multipart/form-data`: `imagen`, `titulo?`, `enlaceRedireccion?`, `activo`). Si `activo=true`, desactiva automáticamente todos los demás.
+- **`PUT /banners/:id/toggle`** — Activa o desactiva un banner (`{ activo: boolean }`). Activar uno desactiva todos los demás.
+- **`DELETE /banners/:id`** — Elimina el banner y su archivo de imagen del servidor.
 
 ### Módulo de Operadores
-- `GET /operators` (Listar todos los operadores y administradores del sistema).
-- `GET /personas/search?dip=...` (Busca una persona en el sistema universitario para ser promovida a operador).
-- `GET /facultades` (Lista las facultades para asignación restrictiva a operadores de notificaciones).
-- `POST /operators` (Crea un usuario administrador).
-- `PUT /operators/:id/toggle` (Inhabilita o rehabilita el acceso de un administrador al panel).
+- **`GET /operators`** — Lista todos los operadores y administradores del sistema con su rol y restricción de facultad.
+- **`GET /personas/search?dip=<CI>`** — Busca una persona en el catálogo universitario para ser promovida a operador.
+- **`GET /facultades`** — Lista las facultades disponibles para asignación restrictiva a operadores de notificaciones.
+- **`POST /operators`** — Crea o reactiva un operador. Cuerpo: `{ idPersona, rol, idFacultad?, password? }`. Roles válidos: `ADMINISTRADOR_APP`, `OPERADOR_NOTIFICACIONES`. Si el usuario ya existe en `_usuarios`, actualiza su `clave2` si se proporciona contraseña.
+- **`PUT /operators/:id/toggle`** — Habilita o deshabilita el acceso de un operador (`{ activo: boolean }`). Opera sobre `id_usr_rol` en `_usr_roles`.

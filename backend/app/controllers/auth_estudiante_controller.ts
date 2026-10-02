@@ -4,6 +4,7 @@ import { DateTime } from 'luxon'
 import { randomUUID, createHash } from 'node:crypto'
 import ActivacionService from '#services/activacion_service'
 import Carnet from '#models/carnet'
+import env from '#start/env'
 
 export default class AuthEstudianteController {
   private activacionService = new ActivacionService()
@@ -23,8 +24,8 @@ export default class AuthEstudianteController {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
           grant_type: 'authorization_code',
-          client_id: process.env.AGETIC_CLIENT_ID || '',
-          redirect_uri: process.env.AGETIC_REDIRECT_URI || '',
+          client_id: env.get('AGETIC_CLIENT_ID') || '',
+          redirect_uri: env.get('AGETIC_REDIRECT_URI') || '',
           code: authCode,
           code_verifier: codeVerifier,
         }).toString(),

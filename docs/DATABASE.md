@@ -26,16 +26,52 @@ Existen tablas propias del ecosistema administrativo de la universidad en las qu
 
 Estas son las tablas exclusivas del sistema de Carnet Digital, creadas y gestionadas íntegramente por nuestras Migraciones de AdonisJS:
 
+### `public.app_tokens`
+Tokens opacos (OAT) generados por AdonisJS para autenticar las peticiones tanto de la App Móvil como del Panel Admin. Garantizan el cierre de sesión seguro o la invalidación automática ante robo.
+
 ### `public.app_registro` (La más importante)
 Guarda el estado real de emisión de la credencial del estudiante.
-- Columnas Clave: `id_persona`, `estado` ('activo', 'inactivo', 'expirado'), `device_token` (identificador único del celular autorizado), `activado_en`, `expira_en`.
-- Rendimiento: Cuenta con los índices compuestos concurrentes `idx_app_registro_persona_estado` y `idx_app_registro_id_persona` que permiten listados ultra veloces en el Panel de Administración sin importar el volumen masivo de estudiantes.
 
-### `public.app_tokens`
-Tokens JWT opacos generados por AdonisJS para autenticar las peticiones de la App Móvil. Garantizan el cierre de sesión seguro o la invalidación automática en caso de robo.
+Columnas clave:
+
+| Columna | Tipo | Descripción |
+|---|---|---|
+| `id` | PK incremental | Semilla para generar QR y código OTP |
+| `id_persona` | FK → `public.personas` | Propietario del carnet |
+| `id_carrera` | FK → `public.carreras` | Carrera vinculada (una fila por carrera) |
+| `estado` | string | `activo`, `inactivo` o `expirado` |
+| `device_token` | text (SHA-256) | Hash del UUID del dispositivo autorizado |
+| `activado_en` | timestamp | Fecha de primera activación |
+| `expira_en` | timestamp | Vigencia (2 años desde activación) |
+
+Índices de rendimiento (creados por la migración `1787400000005`):
+- `idx_app_registro_persona_estado` — índice compuesto `(id_persona, estado)`: evita seq scan en el listado del panel admin.
+- `idx_app_registro_id_persona` — índice simple para lookups directos sin filtro de estado.
 
 ### `public.app_push_tokens`
-Tokens de la API de notificaciones Push de Expo, mapeados por `id_persona`, para poder segmentar avisos institucionales masivos.
+Tokens de la API de notificaciones Push de Expo, mapeados por persona, para segmentar avisos institucionales masivos por facultad o de forma global.
 
 ### `public.app_banners`
 Contenido publicitario o informativo emitido por DTIC que se visualiza en la App, con control de fechas y activación (switch On/Off).
+
+---
+
+## 4. Detalle de Migraciones
+
+Las migraciones se encuentran en `backend/database/migrations/` y se ejecutan en orden estricto por nombre de archivo. El comando es:
+
+```bash
+docker compose exec backend node ace migration:run --force
+```
+
+| Archivo | Tabla creada | Notas |
+|---|---|---|
+| `1787400000000_create_app_tokens_table.ts` | `public.app_tokens` | Tokens OAT para app móvil y panel admin |
+| `1787400000001_create_app_registro_table.ts` | `public.app_registro` | Tabla central del carnet digital |
+| `1787400000002_create_app_push_tokens_table.ts` | `public.app_push_tokens` | Tokens push de Expo |
+| `1787400000003_create_app_banners_table.ts` | `public.app_banners` | Banners informativos |
+| `1787400000005_add_performance_indexes_app_registro.ts` | — | Crea índices de rendimiento sobre `app_registro` |
+
+> **Nota sobre la migración `1787400000005`:** Utiliza `CREATE INDEX CONCURRENTLY`, una sentencia de PostgreSQL que **no puede ejecutarse dentro de una transacción**. Esta migración tiene declarado `static disableTransactions = true`, que es el mecanismo oficial de AdonisJS para ejecutarla fuera de transacción. No se debe eliminar esa propiedad.
+
+> **Nota sobre el número de archivo `1787400000004`:** No existe una migración con ese número. El salto del `003` al `005` es intencional y no afecta el funcionamiento — AdonisJS ordena las migraciones por nombre de archivo de forma natural.
