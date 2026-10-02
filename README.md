@@ -120,6 +120,10 @@ DB_PASSWORD=<contraseña de BD>
 CORS_ORIGIN=https://servicios.uto.edu.bo
 VITE_API_URL=https://api-servicios.uto.edu.bo/api/v1
 
+# Credenciales Ciudadanía Digital (AGETIC)
+AGETIC_CLIENT_ID=<client_id_otorgado_por_agetic>
+AGETIC_REDIRECT_URI=bo.edu.uto.carnetdigital:/oauth2redirect
+
 # Opcionales para el usuario administrador inicial (Seeder) y configuración de ID del sistema
 INITIAL_ADMIN_USER=admin.dtic
 INITIAL_ADMIN_PASSWORD=admin123
