@@ -115,13 +115,15 @@ export default class PushNotificationsController {
    * POST /api/v1/admin/notifications/send
    */
   async enviarPush({ auth, request, response }: HttpContext) {
-    const { appId, roles, tema, titulo, mensaje, facultades } = request.only([
+    const { appId, roles, tema, titulo, mensaje, facultades, ciEspecifico, tipoEstudiante } = request.only([
       'appId',
       'roles',
       'tema',
       'titulo',
       'mensaje',
       'facultades',
+      'ciEspecifico',
+      'tipoEstudiante',
     ])
 
     if (!titulo || !mensaje) {
@@ -183,6 +185,30 @@ export default class PushNotificationsController {
 
       if (tema && tema !== 'todos') {
         query.whereRaw('? = ANY(temas)', [tema])
+      }
+
+      // Aplicar segmentación por C.I. individual
+      if (ciEspecifico && ciEspecifico.trim().length > 0) {
+        query.where('user_ci', ciEspecifico.trim())
+      }
+
+      // Aplicar segmentación por Antigüedad / Tipo Estudiante
+      if (tipoEstudiante === 'nuevos' || tipoEstudiante === 'antiguos') {
+        const currentYear = new Date().getFullYear()
+
+        query.whereExists((subquery) => {
+          subquery
+            .from('public.personas as p')
+            .join('public.estudiantes as e', 'p.id_persona', 'e.id_persona')
+            .join('public.gestiones as g', 'e.id_gestion_ing', 'g.id_gestion')
+            .whereRaw('p.dip = app_push_tokens.user_ci')
+
+          if (tipoEstudiante === 'nuevos') {
+            subquery.where('g.anio', '>=', currentYear)
+          } else {
+            subquery.where('g.anio', '<', currentYear)
+          }
+        })
       }
 
       // Aplicar segmentación por facultades si hay alguna seleccionada o restringida

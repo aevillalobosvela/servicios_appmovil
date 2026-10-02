@@ -5,25 +5,17 @@ import {
   CheckCircle,
   AlertTriangle,
   RefreshCw,
-  BookOpen,
-  Trophy,
-  FileText,
-  MoreHorizontal,
-  Globe,
-  Smartphone
+  Smartphone,
+  Users,
+  Building2,
+  GraduationCap,
+  Tag,
+  IdCard,
+  Target
 } from 'lucide-react';
 import { notificationsService, type PushStats } from './notifications';
 import { authService } from '../auth/auth';
 import './NotificacionesPush.css';
-
-const TEMAS_DISPONIBLES = [
-  { id: 'todos', label: 'Todos los Temas', icon: Globe, color: '#64748b' },
-  { id: 'academico', label: 'Académico', icon: BookOpen, color: '#0284c7' },
-  { id: 'deportivo', label: 'Deportes / Cultural', icon: Trophy, color: '#d97706' },
-  { id: 'alertas', label: 'Alertas / Emergencia', icon: AlertTriangle, color: '#dc2626' },
-  { id: 'tramites', label: 'Trámites y Certificados', icon: FileText, color: '#059669' },
-  { id: 'otros', label: 'Otros / General', icon: MoreHorizontal, color: '#4f46e5' }
-];
 
 const FACULTAD_NOMBRES: Record<string, string> = {
   'A': 'Rectorado',
@@ -55,28 +47,15 @@ export function NotificacionesPush() {
   const [stats, setStats] = useState<PushStats | null>(null);
   const [cargandoStats, setCargandoStats] = useState(false);
 
-  const appId = 'dtic-informaciones';
-  const [rolesSeleccionados, setRolesSeleccionados] = useState<string[]>(['todos']);
+  const [tipoEnvio, setTipoEnvio] = useState<'masivo' | 'individual'>('masivo');
+  const [appIdSeleccionada, setAppIdSeleccionada] = useState('carnet-digital');
+  const [perfil, setPerfil] = useState('todos');
   const [tema, setTema] = useState('todos');
   const [titulo, setTitulo] = useState('');
   const [mensaje, setMensaje] = useState('');
-  const [facultadesSeleccionadas, setFacultadesSeleccionadas] = useState<string[]>([]);
-
-  const handleRoleChange = (role: string) => {
-    if (role === 'todos') {
-      setRolesSeleccionados(['todos']);
-    } else {
-      setRolesSeleccionados((prev) => {
-        const filtered = prev.filter((r) => r !== 'todos');
-        if (filtered.includes(role)) {
-          const next = filtered.filter((r) => r !== role);
-          return next.length === 0 ? ['todos'] : next;
-        } else {
-          return [...filtered, role];
-        }
-      });
-    }
-  };
+  const [facultad, setFacultad] = useState('todas');
+  const [ciEspecifico, setCiEspecifico] = useState('');
+  const [tipoEstudiante, setTipoEstudiante] = useState('todos');
 
   const [enviando, setEnviando] = useState(false);
   const [resultadoExito, setResultadoExito] = useState<string | null>(null);
@@ -108,26 +87,34 @@ export function NotificacionesPush() {
       return;
     }
 
+    const nombreApp = appIdSeleccionada === 'carnet-digital' ? 'Carnet Digital UTO' : appIdSeleccionada === 'dtic-informaciones' ? 'DTIC Informaciones' : 'Todas las aplicaciones';
     const confirmacion = window.confirm(
-      `¿Estás seguro de enviar esta notificación push a la aplicación DTIC Informaciones?`
+      `¿Estás seguro de enviar esta notificación push a: ${nombreApp}?`
     );
 
     if (!confirmacion) return;
 
     setEnviando(true);
     try {
-      const res = await notificationsService.sendNotification({
-        appId,
-        roles: rolesSeleccionados,
+      const payload = {
+        appId: appIdSeleccionada,
+        roles: perfil === 'todos' ? ['todos'] : [perfil],
         tema,
         titulo,
         mensaje,
-        facultades: user?.rol === 'ADMINISTRADOR_APP' ? facultadesSeleccionadas : (user?.idFacultad ? [user.idFacultad] : []),
-      });
+        facultades: user?.rol === 'ADMINISTRADOR_APP' 
+                      ? (facultad !== 'todas' ? [facultad] : []) 
+                      : (user?.idFacultad ? [user.idFacultad] : []),
+        ciEspecifico: tipoEnvio === 'individual' && ciEspecifico.trim() ? ciEspecifico.trim() : undefined,
+        tipoEstudiante: tipoEnvio === 'masivo' && tipoEstudiante !== 'todos' ? tipoEstudiante : undefined,
+      };
+
+      const res = await notificationsService.sendNotification(payload);
 
       setResultadoExito(res.message || `Notificación enviada a ${res.enviados} dispositivos.`);
       setTitulo('');
       setMensaje('');
+      setCiEspecifico('');
       cargarEstadisticas();
     } catch (err: any) {
       setErrorMsg(err.message || 'Ocurrió un error al despachar la notificación.');
@@ -186,158 +173,191 @@ export function NotificacionesPush() {
           )}
 
           <form onSubmit={handleEnviarNotification}>
-            {/* ── Tres columnas de segmentación ── */}
-            <div className="selectores-columnas-grid">
-
-              {/* Columna 1: Perfiles */}
-              <div>
-                <div className="selectores-columna-header">Perfiles Destinatarios</div>
-                <div className="grupo-selectores-columna">
-                  <div
-                    className={`tema-radio-label ${rolesSeleccionados.includes('todos') ? 'tema-radio-label--seleccionado' : ''}`}
-                    onClick={() => handleRoleChange('todos')}
-                  >
-                    <div className="checkbox-square"><div className="checkbox-square-inner" /></div>
-                    <span className="tema-radio-texto">Todos los Perfiles</span>
+            {/* ── CONTENEDOR 2 COLUMNAS ── */}
+            <div className="form-dos-columnas">
+              
+              {/* === COLUMNA 1: SEGMENTACIÓN === */}
+              <div className="form-dos-columnas-columna">
+                {/* ── App Destino ── */}
+                <div>
+                  <div className="selectores-columna-header">Aplicación Destino</div>
+                  <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                    <div
+                      className={`tema-radio-label ${appIdSeleccionada === 'carnet-digital' ? 'tema-radio-label--seleccionado' : ''}`}
+                      onClick={() => setAppIdSeleccionada('carnet-digital')}
+                    >
+                      <div className="radio-circle"><div className="radio-circle-inner" /></div>
+                      <span className="tema-radio-texto">Carnet Digital UTO</span>
+                    </div>
+                    <div
+                      className={`tema-radio-label ${appIdSeleccionada === 'dtic-informaciones' ? 'tema-radio-label--seleccionado' : ''}`}
+                      onClick={() => setAppIdSeleccionada('dtic-informaciones')}
+                    >
+                      <div className="radio-circle"><div className="radio-circle-inner" /></div>
+                      <span className="tema-radio-texto">DTIC Informaciones</span>
+                    </div>
+                    <div
+                      className={`tema-radio-label ${appIdSeleccionada === 'todos' ? 'tema-radio-label--seleccionado' : ''}`}
+                      onClick={() => setAppIdSeleccionada('todos')}
+                    >
+                      <div className="radio-circle"><div className="radio-circle-inner" /></div>
+                      <span className="tema-radio-texto">Todas las Apps</span>
+                    </div>
                   </div>
-                  {(['estudiante', 'docente', 'administrativo', 'egresado'] as const).map((rolId) => {
-                    const label = rolId === 'estudiante' ? 'Estudiantes' : rolId === 'docente' ? 'Docentes' : rolId === 'administrativo' ? 'Administrativos' : 'Egresados';
-                    const esSeleccionado = rolesSeleccionados.includes(rolId);
-                    return (
-                      <div
-                        key={rolId}
-                        className={`tema-radio-label ${esSeleccionado ? 'tema-radio-label--seleccionado' : ''}`}
-                        onClick={() => handleRoleChange(rolId)}
-                      >
-                        <div className="checkbox-square"><div className="checkbox-square-inner" /></div>
-                        <span className="tema-radio-texto">{label}</span>
-                      </div>
-                    );
-                  })}
                 </div>
-              </div>
 
-              {/* Columna 2: Facultades */}
-              <div>
-                <div className="selectores-columna-header">Facultades Destinatarias</div>
-                <div className="grupo-selectores-columna" style={{ maxHeight: '290px', overflowY: 'auto', paddingRight: '4px' }}>
-                  {user?.rol === 'ADMINISTRADOR_APP' ? (
-                    <>
-                      <div
-                        className={`tema-radio-label ${facultadesSeleccionadas.length === 0 ? 'tema-radio-label--seleccionado' : ''}`}
-                        onClick={() => setFacultadesSeleccionadas([])}
-                      >
-                        <div className="checkbox-square"><div className="checkbox-square-inner" /></div>
-                        <span className="tema-radio-texto">Todas las Facultades</span>
-                      </div>
-                      {Object.entries(FACULTAD_NOMBRES)
-                        .filter(([id]) => !['A', 'P', 'Q', 'U', 'M'].includes(id))
-                        .map(([id, nombre]) => {
-                          const esSeleccionado = facultadesSeleccionadas.includes(id);
-                          return (
-                            <div
-                              key={id}
-                              className={`tema-radio-label ${esSeleccionado ? 'tema-radio-label--seleccionado' : ''}`}
-                              onClick={() => {
-                                setFacultadesSeleccionadas((prev) =>
-                                  prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-                                );
-                              }}
-                            >
-                              <div className="checkbox-square"><div className="checkbox-square-inner" /></div>
-                              <span className="tema-radio-texto">
-                                <strong>{FACULTAD_ABREV[id] || id}</strong> — {nombre.replace('Facultad de ', '').replace('Facultad Nacional de ', '').replace('Facultad ', '')}
-                              </span>
-                            </div>
-                          );
-                        })}
-                    </>
+                {/* ── Tipo de Envío ── */}
+                <div>
+                  <div className="selectores-columna-header">Tipo de Envío</div>
+                  <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
+                    <div
+                      className={`tema-radio-label ${tipoEnvio === 'masivo' ? 'tema-radio-label--seleccionado' : ''}`}
+                      onClick={() => setTipoEnvio('masivo')}
+                    >
+                      <div className="radio-circle"><div className="radio-circle-inner" /></div>
+                      <span className="tema-radio-texto">Envío Masivo / Grupal</span>
+                    </div>
+                    <div
+                      className={`tema-radio-label ${tipoEnvio === 'individual' ? 'tema-radio-label--seleccionado' : ''}`}
+                      onClick={() => setTipoEnvio('individual')}
+                    >
+                      <div className="radio-circle"><div className="radio-circle-inner" /></div>
+                      <span className="tema-radio-texto">Envío Individual (Por C.I.)</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Configuración de Envío ── */}
+                <div style={{ padding: '20px', backgroundColor: 'var(--color-fondo)', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
+                  
+                  {tipoEnvio === 'individual' ? (
+                    <div className="formulario-grupo" style={{ marginBottom: 0 }}>
+                      <label className="formulario-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <IdCard size={14} /> Carnet de Identidad (C.I.) Destinatario
+                      </label>
+                      <input 
+                        type="text" 
+                        className="formulario-input" 
+                        placeholder="Ej. 7412345" 
+                        value={ciEspecifico}
+                        onChange={(e) => setCiEspecifico(e.target.value)}
+                        required={tipoEnvio === 'individual'}
+                      />
+                      <span style={{ fontSize: '13px', color: 'var(--color-texto-secundario)', marginTop: '8px', display: 'block' }}>
+                        La notificación llegará directa y exclusivamente al dispositivo asociado a este estudiante o docente.
+                      </span>
+                    </div>
                   ) : (
-                    <>
-                      <div className="tema-radio-label tema-radio-label--deshabilitado" style={{ borderStyle: 'dashed' }}>
-                        <div className="checkbox-square"><div className="checkbox-square-inner" /></div>
-                        <span className="tema-radio-texto">Todas las Facultades</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                      
+                      {/* Perfil */}
+                      <div className="formulario-grupo">
+                        <label className="formulario-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Users size={14} /> Perfil Destinatario
+                        </label>
+                        <select className="formulario-input" value={perfil} onChange={(e) => setPerfil(e.target.value)}>
+                          <option value="todos">Todos los Perfiles</option>
+                          <option value="estudiantes">Solo Estudiantes</option>
+                          <option value="docentes">Solo Docentes</option>
+                          <option value="administrativos">Solo Administrativos</option>
+                        </select>
                       </div>
-                      {Object.entries(FACULTAD_NOMBRES)
-                        .filter(([id]) => !['A', 'P', 'Q', 'U', 'M'].includes(id))
-                        .map(([id, nombre]) => {
-                          const esPerteneciente = user?.idFacultad === id;
-                          return (
-                            <div
-                              key={id}
-                              className={`tema-radio-label tema-radio-label--deshabilitado ${esPerteneciente ? 'tema-radio-label--seleccionado' : ''}`}
-                            >
-                              <div className="checkbox-square"><div className="checkbox-square-inner" /></div>
-                              <span className="tema-radio-texto">
-                                <strong>{FACULTAD_ABREV[id] || id}</strong> — {nombre.replace('Facultad de ', '').replace('Facultad Nacional de ', '').replace('Facultad ', '')} {esPerteneciente ? '(Tu Facultad)' : ''}
-                              </span>
-                            </div>
-                          );
-                        })}
-                    </>
+
+                  {/* Facultad (Solo si es estudiante/docente/todos) */}
+                      {/* Facultad */}
+                      {(perfil === 'todos' || perfil === 'estudiantes' || perfil === 'docentes') && (
+                        <div className="formulario-grupo">
+                          <label className="formulario-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Building2 size={14} /> Facultad Destinataria
+                          </label>
+                          {user?.rol === 'ADMINISTRADOR_APP' ? (
+                            <select className="formulario-input" value={facultad} onChange={(e) => setFacultad(e.target.value)}>
+                              <option value="todas">Todas las Facultades</option>
+                              {Object.entries(FACULTAD_ABREV).map(([id, nombre]) => (
+                                <option key={id} value={id}>{nombre}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input type="text" className="formulario-input" disabled value={FACULTAD_ABREV[user?.idFacultad || ''] || user?.idFacultad} />
+                          )}
+                        </div>
+                      )}
+
+                      {/* Generación */}
+                      {appIdSeleccionada === 'carnet-digital' && (perfil === 'todos' || perfil === 'estudiantes') && (
+                        <div className="formulario-grupo">
+                          <label className="formulario-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <GraduationCap size={14} /> Generación Estudiantil
+                          </label>
+                          <select className="formulario-input" value={tipoEstudiante} onChange={(e) => setTipoEstudiante(e.target.value)}>
+                            <option value="todos">Todos (Nuevos y Antiguos)</option>
+                            <option value="nuevos">Solo Estudiantes Nuevos (Primer Año)</option>
+                            <option value="antiguos">Solo Estudiantes Antiguos</option>
+                          </select>
+                        </div>
+                      )}
+
+                  {/* Temas */}
+                      {/* Temas */}
+                      <div className="formulario-grupo" style={{ marginBottom: 0 }}>
+                        <label className="formulario-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Tag size={14} /> Tema / Categoría de la Alerta
+                        </label>
+                        <select className="formulario-input" value={tema} onChange={(e) => setTema(e.target.value)}>
+                          <option value="todos">General (Llegará a todos)</option>
+                          <option value="academico">Académico</option>
+                          <option value="deportivo">Deportivo</option>
+                          <option value="alertas">Alertas / Emergencias</option>
+                          <option value="tramites">Trámites</option>
+                          <option value="otros">Otros</option>
+                        </select>
+                      </div>
+
+                    </div>
                   )}
                 </div>
               </div>
 
-              {/* Columna 3: Temas */}
-              <div>
-                <div className="selectores-columna-header">Tema / Categoría de la Alerta</div>
-                <div className="grupo-selectores-columna">
-                  {TEMAS_DISPONIBLES.map((t) => {
-                    const Icon = t.icon;
-                    const esSeleccionado = tema === t.id;
-                    return (
-                      <div
-                        key={t.id}
-                        className={`tema-radio-label ${esSeleccionado ? 'tema-radio-label--seleccionado' : ''}`}
-                        onClick={() => setTema(t.id)}
-                      >
-                        <div className="radio-circle"><div className="radio-circle-inner" /></div>
-                        <div className="tema-icon-wrapper" style={{ color: t.color }}>
-                          <Icon size={15} />
-                        </div>
-                        <span className="tema-radio-texto">{t.label}</span>
-                      </div>
-                    );
-                  })}
+              {/* === COLUMNA 2: COMPOSICIÓN DEL MENSAJE === */}
+              <div className="form-dos-columnas-columna" style={{ backgroundColor: 'var(--color-fondo)', padding: '20px', borderRadius: '8px', border: '1px solid var(--color-borde)' }}>
+                <div className="selectores-columna-header" style={{ borderBottom: 'none', marginBottom: '0', paddingBottom: '0' }}>Contenido de la Notificación</div>
+                
+                <div className="form-composicion-campos" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <div className="formulario-grupo">
+                    <label className="formulario-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Target size={14} /> Título del Aviso
+                    </label>
+                    <input
+                      type="text"
+                      className="formulario-input"
+                      placeholder="Ej. Inicio de Inscripciones..."
+                      value={titulo}
+                      onChange={(e) => setTitulo(e.target.value)}
+                      maxLength={80}
+                      style={{ fontSize: '15px' }}
+                    />
+                  </div>
+                  <div className="formulario-grupo" style={{ flex: 1, display: 'flex', flexDirection: 'column', marginBottom: '25px' }}>
+                    <label className="formulario-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Bell size={14} /> Mensaje / Contenido
+                    </label>
+                    <textarea
+                      className="formulario-textarea"
+                      placeholder="Escribe aquí el texto detallado que verán los usuarios..."
+                      value={mensaje}
+                      onChange={(e) => setMensaje(e.target.value)}
+                      maxLength={250}
+                      style={{ flex: 1, minHeight: '140px', resize: 'none' }}
+                    />
+                  </div>
                 </div>
+
+                <button type="submit" className="btn-enviar-push" disabled={enviando} style={{ width: '100%', marginTop: 'auto' }}>
+                  <Send size={22} />
+                  <span>{enviando ? 'Enviando...' : 'Despachar'}</span>
+                  <span className="btn-enviar-push-label">Alerta Push</span>
+                </button>
               </div>
-            </div>
-
-            {/* ── Divisor ── */}
-            <div className="seccion-divider" />
-
-            {/* ── Composición del mensaje + Botón ── */}
-            <div className="form-composicion">
-              <div className="form-composicion-campos">
-                <div className="formulario-grupo">
-                  <label className="formulario-label">Título del Aviso</label>
-                  <input
-                    type="text"
-                    className="formulario-input"
-                    placeholder="Ej. Inicio de Inscripciones Gestión 2/2026"
-                    value={titulo}
-                    onChange={(e) => setTitulo(e.target.value)}
-                    maxLength={80}
-                  />
-                </div>
-                <div className="formulario-grupo">
-                  <label className="formulario-label">Mensaje / Contenido de la Alerta</label>
-                  <textarea
-                    className="formulario-textarea"
-                    placeholder="Escribe aquí el texto detallado que verán los usuarios en la barra de notificaciones de su celular..."
-                    value={mensaje}
-                    onChange={(e) => setMensaje(e.target.value)}
-                    maxLength={250}
-                  />
-                </div>
-              </div>
-
-              <button type="submit" className="btn-enviar-push" disabled={enviando}>
-                <Send size={22} />
-                <span>{enviando ? 'Enviando...' : 'Despachar'}</span>
-                <span className="btn-enviar-push-label">Alerta Push</span>
-              </button>
             </div>
           </form>
         </div>
@@ -346,8 +366,8 @@ export function NotificacionesPush() {
         <div className="metricas-pie">
           <Smartphone size={15} style={{ opacity: 0.5, flexShrink: 0 }} />
           <div className="metrica-chip metrica-chip--activo">
-            <span className="metrica-chip-numero">{getAppTotal('dtic-informaciones')}</span>
-            <span className="metrica-chip-label">DTIC Informaciones</span>
+            <span className="metrica-chip-numero">{getAppTotal(appIdSeleccionada === 'todos' ? 'carnet-digital' : appIdSeleccionada)}</span>
+            <span className="metrica-chip-label">{appIdSeleccionada === 'dtic-informaciones' ? 'DTIC Informaciones' : 'Carnet Digital UTO'}</span>
           </div>
           <div className="metrica-chip">
             <span className="metrica-chip-numero">{stats ? stats.total : '—'}</span>

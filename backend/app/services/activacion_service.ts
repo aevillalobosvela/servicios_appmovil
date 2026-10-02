@@ -1,7 +1,4 @@
-import crypto from 'node:crypto'
-
 import db from '@adonisjs/lucid/services/db'
-import env from '#start/env'
 
 export default class ActivacionService {
   /**

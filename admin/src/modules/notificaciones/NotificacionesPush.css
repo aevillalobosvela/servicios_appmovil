@@ -234,6 +234,27 @@
   }
 }
 
+/* ── Grid 2 columnas para el formulario ── */
+.form-dos-columnas {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 30px;
+  align-items: start;
+}
+
+.form-dos-columnas-columna {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .form-dos-columnas {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+
 .selectores-columna-header {
   font-size: 11px;
   font-weight: 700;

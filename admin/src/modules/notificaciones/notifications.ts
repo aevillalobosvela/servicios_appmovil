@@ -13,6 +13,8 @@ export interface SendPushPayload {
   titulo: string;
   mensaje: string;
   facultades?: string[];
+  ciEspecifico?: string;
+  tipoEstudiante?: string;
 }
 
 export interface SendPushResponse {
