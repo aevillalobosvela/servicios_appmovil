@@ -20,7 +20,7 @@ export interface Persona {
 // Keep legacy alias for components that still import `Carnet`
 export type Carnet = Persona;
 
-type FiltroEstado = 'todos' | 'activo' | 'pendiente' | 'inactivo' | 'expirado';
+// type FiltroEstado = 'todos' | 'activo' | 'pendiente' | 'inactivo' | 'expirado';
 
 export function BadgeEstado({ estado }: { estado: Persona['estado'] }) {
   if (estado === 'activo') {

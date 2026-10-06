@@ -278,7 +278,7 @@ export function NotificacionesPush() {
                               ))}
                             </select>
                           ) : (
-                            <input type="text" className="formulario-input" disabled value={FACULTAD_ABREV[user?.idFacultad || ''] || user?.idFacultad} />
+                            <input type="text" className="formulario-input" disabled value={FACULTAD_ABREV[user?.idFacultad || ''] || user?.idFacultad || ''} />
                           )}
                         </div>
                       )}
