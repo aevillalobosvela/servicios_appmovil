@@ -80,9 +80,9 @@ export default class AdminCarnetController {
         -- Usa el índice idx_app_registro_persona_estado.
         SELECT
           id_persona,
-          COUNT(*) FILTER (WHERE estado = 'activo')   AS carreras_activas,
-          BOOL_OR(estado = 'activo')                  AS tiene_activo,
-          BOOL_OR(estado = 'expirado')                AS tiene_expirado
+          SUM(CASE WHEN estado = 'activo' THEN 1 ELSE 0 END) AS carreras_activas,
+          MAX(CASE WHEN estado = 'activo' THEN 1 ELSE 0 END) = 1 AS tiene_activo,
+          MAX(CASE WHEN estado = 'expirado' THEN 1 ELSE 0 END) = 1 AS tiene_expirado
         FROM public.app_registro
         GROUP BY id_persona
       ),

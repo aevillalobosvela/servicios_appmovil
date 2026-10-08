@@ -180,11 +180,11 @@ export default class PushNotificationsController {
 
       if (roles && Array.isArray(roles) && roles.length > 0 && !roles.includes('todos')) {
         const rolesPg = '{' + roles.join(',') + '}'
-        query.whereRaw('(roles && ? OR \'todos\' = ANY(roles))', [rolesPg])
+        query.whereRaw('(roles && ?::varchar[] OR \'todos\' = ANY(roles))', [rolesPg])
       }
 
       if (tema && tema !== 'todos') {
-        query.whereRaw('? = ANY(temas)', [tema])
+        query.whereRaw('?::varchar = ANY(temas)', [tema])
       }
 
       // Aplicar segmentación por C.I. individual
@@ -223,7 +223,7 @@ export default class PushNotificationsController {
                 .whereRaw('p.dip = app_push_tokens.user_ci')
                 .whereIn('c.id_facultad', targetFacultades)
             })
-            .orWhereRaw('(temas && ?)', ['{' + targetFacultades.map(f => `facultad_${f}`).join(',') + '}'])
+            .orWhereRaw('(temas && ?::varchar[])', ['{' + targetFacultades.map(f => `facultad_${f}`).join(',') + '}'])
         })
       }
 
