@@ -2,8 +2,21 @@
 import type { routes } from './index.ts'
 
 export interface ApiDefinition {
+  banners: {
+    serveImage: typeof routes['banners.serve_image']
+    getActive: typeof routes['banners.get_active']
+    index: typeof routes['banners.index']
+    store: typeof routes['banners.store']
+    toggleActive: typeof routes['banners.toggle_active']
+    destroy: typeof routes['banners.destroy']
+  }
   consulta: {
     verificar: typeof routes['consulta.verificar']
+  }
+  pushNotifications: {
+    registrarToken: typeof routes['push_notifications.registrar_token']
+    obtenerEstadisticas: typeof routes['push_notifications.obtener_estadisticas']
+    enviarPush: typeof routes['push_notifications.enviar_push']
   }
   authPanel: {
     login: typeof routes['auth_panel.login']
@@ -21,7 +34,13 @@ export interface ApiDefinition {
   adminCarnet: {
     index: typeof routes['admin_carnet.index']
     show: typeof routes['admin_carnet.show']
-    generarActivacion: typeof routes['admin_carnet.generar_activacion']
     desactivar: typeof routes['admin_carnet.desactivar']
+  }
+  adminUsers: {
+    listOperators: typeof routes['admin_users.list_operators']
+    searchPersona: typeof routes['admin_users.search_persona']
+    listFacultades: typeof routes['admin_users.list_facultades']
+    createOperator: typeof routes['admin_users.create_operator']
+    toggleOperator: typeof routes['admin_users.toggle_operator']
   }
 }

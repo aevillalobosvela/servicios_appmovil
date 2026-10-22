@@ -5,8 +5,11 @@
 
 export const controllers = {
   AdminCarnet: () => import('#controllers/admin_carnet_controller'),
+  AdminUsers: () => import('#controllers/admin_users_controller'),
   AuthEstudiante: () => import('#controllers/auth_estudiante_controller'),
   AuthPanel: () => import('#controllers/auth_panel_controller'),
+  Banners: () => import('#controllers/banners_controller'),
   Carnet: () => import('#controllers/carnet_controller'),
   Consulta: () => import('#controllers/consulta_controller'),
+  PushNotifications: () => import('#controllers/push_notifications_controller'),
 }

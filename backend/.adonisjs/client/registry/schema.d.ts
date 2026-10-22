@@ -7,6 +7,18 @@ import type { InferInput, SimpleError } from '@vinejs/vine/types'
 export type ParamValue = string | number | bigint | boolean
 
 export interface Registry {
+  'banners.serve_image': {
+    methods: ["GET","HEAD"]
+    pattern: '/uploads/banners/:filename'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { filename: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/banners_controller').default['serveImage']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/banners_controller').default['serveImage']>>>
+    }
+  }
   'consulta.verificar': {
     methods: ["POST"]
     pattern: '/api/v1/consulta/verificar'
@@ -17,6 +29,30 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/consulta_controller').default['verificar']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/consulta_controller').default['verificar']>>>
+    }
+  }
+  'push_notifications.registrar_token': {
+    methods: ["POST"]
+    pattern: '/api/v1/notifications/register-token'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/push_notifications_controller').default['registrarToken']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/push_notifications_controller').default['registrarToken']>>>
+    }
+  }
+  'banners.get_active': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/banners/active'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/banners_controller').default['getActive']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/banners_controller').default['getActive']>>>
     }
   }
   'auth_panel.login': {
@@ -127,18 +163,6 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin_carnet_controller').default['show']>>>
     }
   }
-  'admin_carnet.generar_activacion': {
-    methods: ["POST"]
-    pattern: '/api/v1/admin/carnets/activar'
-    types: {
-      body: {}
-      paramsTuple: []
-      params: {}
-      query: {}
-      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin_carnet_controller').default['generarActivacion']>>>
-      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin_carnet_controller').default['generarActivacion']>>>
-    }
-  }
   'admin_carnet.desactivar': {
     methods: ["POST"]
     pattern: '/api/v1/admin/carnets/:id/desactivar'
@@ -149,6 +173,138 @@ export interface Registry {
       query: {}
       response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin_carnet_controller').default['desactivar']>>>
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin_carnet_controller').default['desactivar']>>>
+    }
+  }
+  'push_notifications.obtener_estadisticas': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/admin/notifications/stats'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/push_notifications_controller').default['obtenerEstadisticas']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/push_notifications_controller').default['obtenerEstadisticas']>>>
+    }
+  }
+  'push_notifications.enviar_push': {
+    methods: ["POST"]
+    pattern: '/api/v1/admin/notifications/send'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/push_notifications_controller').default['enviarPush']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/push_notifications_controller').default['enviarPush']>>>
+    }
+  }
+  'banners.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/admin/banners'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/banners_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/banners_controller').default['index']>>>
+    }
+  }
+  'banners.store': {
+    methods: ["POST"]
+    pattern: '/api/v1/admin/banners'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/banners_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/banners_controller').default['store']>>>
+    }
+  }
+  'banners.toggle_active': {
+    methods: ["PUT"]
+    pattern: '/api/v1/admin/banners/:id/toggle'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/banners_controller').default['toggleActive']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/banners_controller').default['toggleActive']>>>
+    }
+  }
+  'banners.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/admin/banners/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/banners_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/banners_controller').default['destroy']>>>
+    }
+  }
+  'admin_users.list_operators': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/admin/operators'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin_users_controller').default['listOperators']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin_users_controller').default['listOperators']>>>
+    }
+  }
+  'admin_users.search_persona': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/admin/personas/search'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin_users_controller').default['searchPersona']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin_users_controller').default['searchPersona']>>>
+    }
+  }
+  'admin_users.list_facultades': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/admin/facultades'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin_users_controller').default['listFacultades']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin_users_controller').default['listFacultades']>>>
+    }
+  }
+  'admin_users.create_operator': {
+    methods: ["POST"]
+    pattern: '/api/v1/admin/operators'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin_users_controller').default['createOperator']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin_users_controller').default['createOperator']>>>
+    }
+  }
+  'admin_users.toggle_operator': {
+    methods: ["PUT"]
+    pattern: '/api/v1/admin/operators/:id/toggle'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/admin_users_controller').default['toggleOperator']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/admin_users_controller').default['toggleOperator']>>>
     }
   }
 }

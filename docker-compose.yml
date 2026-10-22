@@ -29,6 +29,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       DB_DATABASE: ${DB_DATABASE}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost}
+      AGETIC_ISSUER: ${AGETIC_ISSUER:-https://proveedor.ciudadaniadigital.bo}
       AGETIC_CLIENT_ID: ${AGETIC_CLIENT_ID}
       AGETIC_REDIRECT_URI: ${AGETIC_REDIRECT_URI}
     healthcheck:

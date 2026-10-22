@@ -17,9 +17,10 @@ export default class AuthEstudianteController {
     }
 
     // 1. Intercambiar authCode por token de AGETIC
+    const ageticIssuer = env.get('AGETIC_ISSUER') || 'https://proveedor.ciudadaniadigital.bo'
     let tokenData: any = null
     try {
-      const tokenResponse = await fetch('https://proveedor.ciudadania.demo.agetic.gob.bo/token', {
+      const tokenResponse = await fetch(`${ageticIssuer}/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: new URLSearchParams({
@@ -34,7 +35,14 @@ export default class AuthEstudianteController {
       tokenData = await tokenResponse.json()
       if (!tokenResponse.ok) {
         console.error('AGETIC Error:', tokenData)
-        return response.badRequest({ error: 'No se pudo validar el inicio de sesión con Ciudadanía Digital' })
+        return response.badRequest({ 
+          error: 'No se pudo validar el inicio de sesión con Ciudadanía Digital',
+          agetic_raw_error: tokenData,
+          debug_env: {
+            clientIdConfigurado: env.get('AGETIC_CLIENT_ID') ? 'Si existe' : 'VACÍO o NULL',
+            redirectUriConfigurado: env.get('AGETIC_REDIRECT_URI') ? 'Si existe' : 'VACÍO o NULL'
+          }
+        })
       }
     } catch (e) {
       return response.badRequest({ error: 'Error de comunicación con Ciudadanía Digital' })
@@ -43,7 +51,7 @@ export default class AuthEstudianteController {
     // 2. Extraer CI usando el endpoint userinfo de AGETIC
     let ci = ''
     try {
-      const userInfoResponse = await fetch('https://proveedor.ciudadania.demo.agetic.gob.bo/me', {
+      const userInfoResponse = await fetch(`${ageticIssuer}/me`, {
         headers: { 'Authorization': `Bearer ${tokenData.access_token}` }
       })
       if (!userInfoResponse.ok) {
